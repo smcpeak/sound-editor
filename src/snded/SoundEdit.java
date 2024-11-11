@@ -8,15 +8,25 @@ import util.Util;
 
 import mcve.audio.SimpleAudioConversion;
 
+import javax.sound.sampled.AudioFileFormat;
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 
 public class SoundEdit {
+  public static int getBytesPerSample(AudioInputStream audio)
+  {
+    AudioFormat fmt = audio.getFormat();
+    int ret = SimpleAudioConversion.bytesPerSample(fmt.getSampleSizeInBits());
+    assert(ret > 0);
+    return ret;
+  }
+
   // Read all of the samples from `audio` into an array of `float`.
   //
   // For stereo audio, the samples are interleaved as (L,R) pairs.
@@ -24,8 +34,7 @@ public class SoundEdit {
   public float[] getSamples(AudioInputStream audio) throws IOException
   {
     AudioFormat fmt = audio.getFormat();
-    int bytesPerSample = SimpleAudioConversion.bytesPerSample(fmt.getSampleSizeInBits());
-    assert(bytesPerSample > 0);
+    int bytesPerSample = getBytesPerSample(audio);
 
     int numBytesAvail = audio.available();
     byte[] bytes = new byte[numBytesAvail];
@@ -71,9 +80,8 @@ public class SoundEdit {
     System.out.println("is big endian: " + fmt.isBigEndian());
     System.out.println("properties: " + fmt.properties());
 
-    int bytesPerSample = SimpleAudioConversion.bytesPerSample(fmt.getSampleSizeInBits());
+    int bytesPerSample = getBytesPerSample(audio);
     System.out.println("bytes per sample: " + bytesPerSample);
-    assert(bytesPerSample > 0);
 
     System.out.println("available: " + audio.available());
     System.out.println("frame length: " + audio.getFrameLength());
@@ -112,8 +120,30 @@ public class SoundEdit {
   // without any intervening processing.  This is meant, in part, to
   // check that doing no-op processing preserves the information.
   public void readWrite(AudioInputStream audio, String outFname)
+    throws IOException
   {
-    // TODO
+    AudioFormat fmt = audio.getFormat();
+
+    // Convert bytes into floats.
+    float[] samples = getSamples(audio);
+
+    // Convert floats back into bytes.
+    int bytesPerSample = getBytesPerSample(audio);
+    int numBytes = samples.length * bytesPerSample;
+    byte[] bytes = new byte[numBytes];
+    int numConvertedBytes =
+      SimpleAudioConversion.encode(samples, bytes, samples.length, fmt);
+    assert(numConvertedBytes == numBytes);
+
+    // Wrap the bytes in streams to provide them.
+    try (ByteArrayInputStream bais = new ByteArrayInputStream(bytes)) {
+      try (AudioInputStream ais = new AudioInputStream(bais, fmt, bytes.length)) {
+
+        // Write the output file.
+        AudioSystem.write(ais, AudioFileFormat.Type.WAVE, new File(outFname));
+        System.out.println("wrote " + outFname);
+      }
+    }
   }
 
   public void parseCommand(AudioInputStream audio, String command, String[] args)
@@ -132,6 +162,11 @@ public class SoundEdit {
       case "samples":
         requireArgs(args, 1);
         printSamples(audio, Integer.valueOf(args[0]));
+        break;
+
+      case "copy":
+        requireArgs(args, 1);
+        readWrite(audio, args[0]);
         break;
 
       default:
