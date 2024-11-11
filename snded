@@ -1,0 +1,50 @@
+#!/bin/sh
+# launch Sound Editor
+
+# resolve symlinks
+me="$0"
+resolved=`readlink "$me"`
+while [ $? -eq 0 -a x"$me" != x"$resolved" ]; do
+  me="$resolved"
+  resolved=`readlink "$me"`
+done
+
+instdir=`dirname "$me"`
+
+# running on Windows?
+case "$OS" in
+  Windows*)
+    is_windows=true
+    ;;
+
+  *)
+    is_windows=false
+    ;;
+esac
+
+# Use the JAR file if is there.
+jarfile="$instdir/dist/snded.jar"
+if [ -f "$jarfile" ]; then
+  if $is_windows; then
+    jarfile=`cygpath -w "$jarfile"`
+  fi
+  exec java -ea -jar "$jarfile" "$@"
+fi
+
+# Pasting from clipboard fails on some JVMs with
+# "Comparator violates its general contract!"
+# https://bugs.openjdk.java.net/browse/JDK-8078607
+workaround="-Djava.util.Arrays.useLegacyMergeSort=true"
+
+classpath="$instdir/bin"
+if [ -d "$classpath" ]; then
+  if $is_windows; then
+    classpath=`cygpath -w "$classpath"`
+  fi
+  exec java -classpath "$classpath" -ea snded.SoundEdit $workaround "$@"
+else
+  echo "Missing: $classpath or $jarfile"
+  echo "Maybe the sources are not compiled?  Try running 'make'."
+fi
+
+# EOF
