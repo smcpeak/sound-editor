@@ -156,6 +156,102 @@ public class SoundEdit {
     }
   }
 
+  public int secondsToSamples(AudioInputStream audio, float seconds)
+  {
+    AudioFormat fmt = audio.getFormat();
+
+    return (int)(seconds * fmt.getSampleRate());
+  }
+
+  public float samplesToSeconds(AudioInputStream audio, int samples)
+  {
+    AudioFormat fmt = audio.getFormat();
+
+    return (float)samples / fmt.getSampleRate();
+  }
+
+  // Attempt to identify discrete sounds in the input.
+  public void findSounds(
+    // Audio to process.
+    AudioInputStream audio,
+
+    // Any sample this loud or louder (measured in decibels) will be
+    // considered loud enough to anchor a sound.
+    float loudnessThreshold_dB,
+
+    // If two loud samples are this close (measured in seconds), then
+    // they are considered to be part of the same sound.
+    float closenessThreshold_s)
+
+    throws IOException
+  {
+    float[] samples = getSamples(audio);
+    System.out.println("total samples: " + samples.length);
+
+    int closenessThreshold_samples =
+      secondsToSamples(audio, closenessThreshold_s);
+    System.out.println(
+      "closenessThreshold_samples: " + closenessThreshold_samples);
+
+    // True if we have a current sound being accumulated.
+    boolean haveSound = false;
+
+    // If `haveSound`, the sample index of the loud sample at the start
+    // of the current sound.
+    int soundStart = -1;
+
+    // If `haveSound`, the sample index of the previous loud sample.
+    int prevLoudIndex = -1;
+
+    // If `haveSound`, the maximum loudness of the current sound, in
+    // decibels.
+    float soundMaxLoudness = -100.0f;
+
+    for (int i=0; i < samples.length; ++i) {
+      float dB = linearToDecibels(samples[i]);
+
+      if (dB > loudnessThreshold_dB) {
+        // Will we continue the current sound?
+        boolean continueSound =
+          haveSound &&
+          i - prevLoudIndex <= closenessThreshold_samples;
+
+        if (continueSound) {
+          prevLoudIndex = i;
+          soundMaxLoudness = Math.max(soundMaxLoudness, dB);
+        }
+
+        else {
+          if (haveSound) {
+            // Emit the current sound.
+            float duration_s =
+              samplesToSeconds(audio, prevLoudIndex - soundStart);
+            System.out.println(
+              "sound [" + soundStart + ", " + prevLoudIndex +
+              "]: maxLoud = " + soundMaxLoudness + " dB, " +
+              "duration = " + duration_s + " s");
+          }
+
+          // Start a new sound.
+          soundStart = i;
+          prevLoudIndex = i;
+          soundMaxLoudness = dB;
+          haveSound = true;
+        }
+      }
+    }
+
+    if (haveSound) {
+      // Emit the final sound.
+      float duration_s =
+        samplesToSeconds(audio, prevLoudIndex - soundStart);
+      System.out.println(
+        "sound [" + soundStart + ", " + prevLoudIndex +
+        "]: maxLoud = " + soundMaxLoudness + " dB, " +
+        "duration = " + duration_s + " s");
+    }
+  }
+
   public void parseCommand(AudioInputStream audio, String command, String[] args)
     throws IOException
   {
@@ -177,6 +273,11 @@ public class SoundEdit {
       case "copy":
         requireArgs(args, 1);
         readWrite(audio, args[0]);
+        break;
+
+      case "sounds":
+        requireArgs(args, 2);
+        findSounds(audio, Float.valueOf(args[0]), Float.valueOf(args[1]));
         break;
 
       default:
@@ -213,6 +314,14 @@ public class SoundEdit {
 
             samples <N>
               Print up to N samples.
+
+            copy <outFname>
+              Copy the file by decoding then re-encoding the samples.
+
+            sounds <loud_dB> <close_s>
+              Report on the set of discrete sounds, where a "sound" has
+              samples louder than <loud_dB> that are within <close_s>
+              seconds of each other.
           """);
         System.exit(2);
       }
