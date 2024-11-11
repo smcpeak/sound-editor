@@ -87,6 +87,29 @@ public class SoundEdit {
     System.out.println("frame length: " + audio.getFrameLength());
   }
 
+  // Convert `sample`, nominally in [-1,1], to the "decibel" measure
+  // that Audacity uses.  Note that this does not preserve information
+  // because the output does not indicate the sign of the input.
+  public float linearToDecibels(float sample)
+  {
+    if (sample == 0.0f) {
+      // `log10` is not defined on zero.  Use a very negative number of
+      // decibels.  I've seen at least one place in Audacity that uses
+      // the same value for a similar purpose.
+      return -100.0f;
+    }
+    else {
+      // Decibels are defined using the log of a ratio to a reference
+      // level.  Here, the reference level is 1.
+      //
+      // Multiplying by 20 (rather than 10 as the name would suggest) is
+      // related to the distinction between power and amplitude, but I
+      // don't know the details.
+      //
+      return (float)(20.0 * Math.log10(Math.abs(sample)));
+    }
+  }
+
   public void printSamples(AudioInputStream audio, int maxSamples)
     throws IOException
   {
@@ -96,20 +119,7 @@ public class SoundEdit {
 
     for (int i=0; i < maxSamples && i < samples.length; ++i) {
       float f = samples[i];
-
-      // Express the sample as decibels relative to 1.0.  This mimics
-      // the calculation done by Audacity.
-      //
-      // Also I can't use the "?:" operator here because of a bug in
-      // the java compiled that issues a spurious warning.
-      //
-      float decibels;
-      if (f == 0.0f) {
-        decibels = -100.0f;
-      }
-      else {
-        decibels = (float)(20.0 * Math.log10(Math.abs(f)));
-      }
+      float decibels = linearToDecibels(f);
 
       System.out.println("  sample " + i + ": " + f + "  \t" +
                          decibels + " dB");
