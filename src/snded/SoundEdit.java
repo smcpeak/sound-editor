@@ -3,6 +3,7 @@
 
 package snded;
 
+import util.StringUtil;
 import util.Util;
 
 import mcve.audio.SimpleAudioConversion;
@@ -13,9 +14,10 @@ import javax.sound.sampled.AudioSystem;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
 
 public class SoundEdit {
-  public void process(AudioInputStream audio) throws IOException
+  public void printInfo(AudioInputStream audio) throws IOException
   {
     AudioFormat fmt = audio.getFormat();
     System.out.println("format: " + fmt);
@@ -81,25 +83,47 @@ public class SoundEdit {
     }
   }
 
+  public void parseCommand(AudioInputStream audio, String command, String[] args)
+    throws IOException
+  {
+    switch (command) {
+      case "info":
+        printInfo(audio);
+        break;
+
+      default:
+        throw new RuntimeException(
+          "Unknown command: " + StringUtil.doubleQuote(command));
+    }
+  }
 
   public static void main(String args[])
   {
     SoundEdit se = new SoundEdit();
     try {
-      if (args.length < 1) {
-        System.err.println("usage: snded <file.wav>");
+      if (args.length < 2) {
+        System.err.print(
+          """
+          usage: snded <file.wav> <command> [<args>]
+
+          commands:
+            info
+              Print some details about the given file.
+          """);
         System.exit(2);
       }
 
       String fname = args[0];
-      System.out.println("fname: " + fname);
+      String command = args[1];
+      String[] cmdArgs = Arrays.copyOfRange(args, 2, args.length);
 
       try (AudioInputStream audio = AudioSystem.getAudioInputStream(new File(fname))) {
-        se.process(audio);
+        se.parseCommand(audio, command, cmdArgs);
       }
     }
     catch (Exception e) {
       System.out.println(Util.getExceptionMessage(e));
+      System.exit(2);
     }
   }
 }

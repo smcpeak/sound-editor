@@ -138,6 +138,9 @@ public class Util {
             // including permission errors.
             conflict = "Could not open file";
         }
+        if (e instanceof RuntimeException) {
+            conflict = "Error";
+        }
 
         return conflict+": "+e.getMessage();
     }
