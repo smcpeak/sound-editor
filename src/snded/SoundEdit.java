@@ -17,12 +17,54 @@ import java.io.IOException;
 import java.util.Arrays;
 
 public class SoundEdit {
+  // Read all of the samples from `audio` into an array of `float`.
+  //
+  // For stereo audio, the samples are interleaved as (L,R) pairs.
+  //
+  public float[] getSamples(AudioInputStream audio) throws IOException
+  {
+    AudioFormat fmt = audio.getFormat();
+    int bytesPerSample = SimpleAudioConversion.bytesPerSample(fmt.getSampleSizeInBits());
+    assert(bytesPerSample > 0);
+
+    int numBytesAvail = audio.available();
+    byte[] bytes = new byte[numBytesAvail];
+    int numBytesRead = audio.read(bytes);
+
+    int numSamples = numBytesRead / bytesPerSample;
+
+    float[] samples = new float[numSamples];
+    int numConvertedSamples = SimpleAudioConversion.decode(
+      bytes,
+      samples,
+      numBytesRead,
+      fmt);
+    assert(numConvertedSamples == numSamples);
+
+    return samples;
+  }
+
+  public void printBytes(AudioInputStream audio, int maxBytes) throws IOException
+  {
+    AudioFormat fmt = audio.getFormat();
+
+    int numBytesAvail = audio.available();
+    byte[] bytes = new byte[numBytesAvail];
+    int numBytesRead = audio.read(bytes);
+
+    System.out.println("read " + numBytesRead + " bytes:");
+
+    for (int i=0; i < maxBytes && i < bytes.length; ++i) {
+      System.out.println("  byte " + i + ": " + bytes[i]);
+    }
+  }
+
   public void printInfo(AudioInputStream audio) throws IOException
   {
     AudioFormat fmt = audio.getFormat();
     System.out.println("format: " + fmt);
     System.out.println("channels: " + fmt.getChannels());
-    System.out.println("frame rate (fr/s): " + fmt.getFrameRate());
+    System.out.println("frame rate (Hz): " + fmt.getFrameRate());
     System.out.println("frame size (bytes): " + fmt.getFrameSize());
     System.out.println("sample rate (Hz): " + fmt.getSampleRate());
     System.out.println("sample size in bits: " + fmt.getSampleSizeInBits());
@@ -35,33 +77,16 @@ public class SoundEdit {
 
     System.out.println("available: " + audio.available());
     System.out.println("frame length: " + audio.getFrameLength());
+  }
 
-    int numBytesAvail = audio.available();
-    byte[] bytes = new byte[numBytesAvail];
-    int numBytesRead = audio.read(bytes);
+  public void printSamples(AudioInputStream audio, int maxSamples)
+    throws IOException
+  {
+    float[] samples = getSamples(audio);
 
-    System.out.println("read " + numBytesRead + " bytes; first 10:");
+    System.out.println("read " + samples.length + " samples:");
 
-    for (int i=0; i < 10 && i < bytes.length; ++i) {
-      System.out.println("  byte " + i + ": " + bytes[i]);
-    }
-
-    int numSamples = numBytesRead / bytesPerSample;
-    System.out.println("num samples: " + numSamples);
-
-    // Note: For stereo audio, the samples are interleaved as (L,R)
-    // pairs.
-    float[] samples = new float[numSamples];
-    int numConvertedSamples = SimpleAudioConversion.decode(
-      bytes,
-      samples,
-      numBytesRead,
-      fmt);
-    System.out.println("converted samples: " + numConvertedSamples);
-
-    for (int i=0;
-         i < 10 && i < samples.length && i < numConvertedSamples;
-         ++i) {
+    for (int i=0; i < maxSamples && i < samples.length; ++i) {
       float f = samples[i];
 
       // Express the sample as decibels relative to 1.0.  This mimics
@@ -83,6 +108,14 @@ public class SoundEdit {
     }
   }
 
+  // Read the data into an array of samples, then write them back out
+  // without any intervening processing.  This is meant, in part, to
+  // check that doing no-op processing preserves the information.
+  public void readWrite(AudioInputStream audio, String outFname)
+  {
+    // TODO
+  }
+
   public void parseCommand(AudioInputStream audio, String command, String[] args)
     throws IOException
   {
@@ -91,9 +124,29 @@ public class SoundEdit {
         printInfo(audio);
         break;
 
+      case "bytes":
+        requireArgs(args, 1);
+        printBytes(audio, Integer.valueOf(args[0]));
+        break;
+
+      case "samples":
+        requireArgs(args, 1);
+        printSamples(audio, Integer.valueOf(args[0]));
+        break;
+
       default:
         throw new RuntimeException(
           "Unknown command: " + StringUtil.doubleQuote(command));
+    }
+  }
+
+  // If `args` has fewer than `numRequired` elements, throw a
+  // `RuntimeException`.
+  public void requireArgs(String args[], int numRequired)
+  {
+    if (args.length < numRequired) {
+      throw new RuntimeException(
+        "Command requires at least " + numRequired + " arguments.");
     }
   }
 
@@ -109,6 +162,12 @@ public class SoundEdit {
           commands:
             info
               Print some details about the given file.
+
+            bytes <N>
+              Print up to N bytes of sample data.
+
+            samples <N>
+              Print up to N samples.
           """);
         System.exit(2);
       }

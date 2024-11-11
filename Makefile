@@ -37,6 +37,8 @@ dist/snded.jar: $(JAVA_FILES)
 .PHONY: check
 check: dist/snded.jar
 	./snded soft-click.wav info
+	./snded soft-click.wav bytes 4
+	./snded soft-click.wav samples 4
 
 
 .PHONY: clean all check
