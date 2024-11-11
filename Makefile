@@ -1,14 +1,7 @@
 # sound-edit/Makefile
 
-all: dist/snded.jar
-
-JAVAC := javac
-JAR := jar
-
-JAVA_FILES := $(shell find src -name '*.java')
-
-# Ensure the directory meant to hold the output file of a recipe exists.
-CREATE_OUTPUT_DIRECTORY = @mkdir -p $(dir $@)
+all:
+.PHONY: all
 
 
 # Eliminate all implicit rules.
@@ -21,12 +14,30 @@ CREATE_OUTPUT_DIRECTORY = @mkdir -p $(dir $@)
 .SECONDARY:
 
 
+# Tools.
+JAVAC := javac
+JAR := jar
+
+# Ensure the directory meant to hold the output file of a recipe exists.
+CREATE_OUTPUT_DIRECTORY = @mkdir -p $(dir $@)
+
+
+# Sources.
+JAVA_FILES := $(shell find src -name '*.java')
+
+
+all: dist/snded.jar
 dist/snded.jar: $(JAVA_FILES)
 	rm -rf bin
 	mkdir -p bin
 	$(JAVAC) -sourcepath src -d bin $(JAVA_FILES)
 	mkdir -p dist
 	cd bin && $(JAR) cfm ../dist/snded.jar ../src/MANIFEST.MF *
+
+.PHONY: check
+check: dist/snded.jar
+	./snded soft-click.wav
+
 
 .PHONY: clean all check
 clean:
