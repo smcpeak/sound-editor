@@ -188,24 +188,37 @@ public class SoundEdit {
     float[] samples = getSamples(audio);
     System.out.println("total samples: " + samples.length);
 
-    float frameRate = audio.getFormat().getFrameRate();
+    // This code is intended to work correctly with multi-channel data,
+    // but I haven't actually tested with more than one.
+    AudioFormat fmt = audio.getFormat();
+    float frameRate = fmt.getFrameRate();
+    int numChannels = fmt.getChannels();
+    int numFrames = samples.length / numChannels;
 
-    int closenessThreshold_samples =
-      secondsToSamples(audio, closenessThreshold_s);
+    int closenessThreshold_frames =
+      (int)(closenessThreshold_s * frameRate);
     System.out.println(
-      "closenessThreshold_samples: " + closenessThreshold_samples);
+      "closenessThreshold_frames: " + closenessThreshold_frames);
 
     // Non-null if we have a current sound being accumulated.
     Sound curSound = null;
 
-    for (int i=0; i < samples.length; ++i) {
-      float dB = linearToDecibels(samples[i]);
+    for (int frameNum=0; frameNum < numFrames; ++frameNum) {
+      // Get maximum loudness over all channels.
+      float dB;
+      {
+        int sampleNum = frameNum * numChannels;
+        dB = linearToDecibels(samples[sampleNum]);
+        for (int c=1; c < numChannels; ++c) {
+          dB = Math.max(dB, linearToDecibels(samples[sampleNum + c]));
+        }
+      }
 
       if (dB > loudnessThreshold_dB) {
         // Continue the current sound?
         if ((curSound != null) &&
-            i - curSound.m_endFrame <= closenessThreshold_samples) {
-          curSound.extend(i, dB);
+            frameNum - curSound.m_endFrame <= closenessThreshold_frames) {
+          curSound.extend(frameNum, dB);
         }
 
         else {
@@ -215,7 +228,7 @@ public class SoundEdit {
           }
 
           // Start a new sound.
-          curSound = new Sound(i, i, dB);
+          curSound = new Sound(frameNum, frameNum, dB);
         }
       }
     }
