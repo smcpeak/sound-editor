@@ -27,10 +27,17 @@ public class Sound {
     m_maxLoudness_dB = maxLoudness_dB;
   }
 
+  // Number of frames in this sound.  Always positive.
+  public long frameDuration()
+  {
+    return m_endFrame - m_startFrame + 1;
+  }
+
   // Extend the segment to `endFrame`, incorporating `loudness_dB` into
   // the maximum loudness.
   public void extend(long endFrame, float loudness_dB)
   {
+    assert(endFrame >= m_endFrame);
     m_endFrame = endFrame;
     m_maxLoudness_dB = Math.max(m_maxLoudness_dB, loudness_dB);
   }
@@ -40,7 +47,7 @@ public class Sound {
   {
     assert(frameRate > 0);
     float duration_s =
-      (float)(m_endFrame - m_startFrame + 1) / frameRate;
+      (float)frameDuration() / frameRate;
 
     System.out.println(
       "sound [" + m_startFrame + ", " + m_endFrame +

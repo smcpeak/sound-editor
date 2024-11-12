@@ -183,7 +183,12 @@ public class SoundEdit {
 
     // If two loud samples are this close (measured in seconds), then
     // they are considered to be part of the same sound.
-    float closenessThreshold_s)
+    float closenessThreshold_s,
+
+    // If a sound would be created but it is shorter than this duration
+    // (measured in seconds), discard it.  If this is zero, then nothing
+    // is discarded.
+    float durationThreshold_s)
 
     throws IOException
   {
@@ -198,6 +203,8 @@ public class SoundEdit {
 
     int closenessThreshold_frames =
       (int)(closenessThreshold_s * frameRate);
+    int durationThreshold_frames =
+      (int)(durationThreshold_s * frameRate);
 
     // List of all discovered sounds.
     List<Sound> sounds = new ArrayList<Sound>();
@@ -224,7 +231,8 @@ public class SoundEdit {
         }
 
         else {
-          if (curSound != null) {
+          if (curSound != null &&
+              curSound.frameDuration() >= durationThreshold_frames) {
             // Emit the current sound.
             sounds.add(curSound);
           }
@@ -235,7 +243,8 @@ public class SoundEdit {
       }
     }
 
-    if (curSound != null) {
+    if (curSound != null &&
+        curSound.frameDuration() >= durationThreshold_frames) {
       // Emit the final sound.
       sounds.add(curSound);
     }
@@ -247,12 +256,35 @@ public class SoundEdit {
   public void printSounds(
     AudioInputStream audio,
     float loudnessThreshold_dB,
-    float closenessThreshold_s) throws IOException
+    float closenessThreshold_s,
+    float durationThreshold_s) throws IOException
   {
-    List<Sound> sounds = findSounds(audio, loudnessThreshold_dB, closenessThreshold_s);
+    List<Sound> sounds = findSounds(audio,
+      loudnessThreshold_dB,
+      closenessThreshold_s,
+      durationThreshold_s);
+
     for (Sound s : sounds) {
       s.printWithDuration(audio.getFormat().getFrameRate());
     }
+  }
+
+  // Silence everything but identified sounds that are at least
+  // `durationThreshold_s` seconds long.
+  public void declick(
+    AudioInputStream audio,
+    float loudnessThreshold_dB,
+    float closenessThreshold_s,
+    float durationThreshold_s)
+
+    throws IOException
+  {
+    List<Sound> sounds = findSounds(audio,
+      loudnessThreshold_dB,
+      closenessThreshold_s,
+      durationThreshold_s);
+
+    // TODO
   }
 
   public void parseCommand(AudioInputStream audio, String command, String[] args)
@@ -279,8 +311,11 @@ public class SoundEdit {
         break;
 
       case "sounds":
-        requireArgs(args, 2);
-        printSounds(audio, Float.valueOf(args[0]), Float.valueOf(args[1]));
+        requireArgs(args, 3);
+        printSounds(audio,
+          Float.valueOf(args[0]),
+          Float.valueOf(args[1]),
+          Float.valueOf(args[2]));
         break;
 
       default:
@@ -321,10 +356,11 @@ public class SoundEdit {
             copy <outFname>
               Copy the file by decoding then re-encoding the samples.
 
-            sounds <loud_dB> <close_s>
+            sounds <loud_dB> <close_s> <duration_s>
               Report on the set of discrete sounds, where a "sound" has
               samples louder than <loud_dB> that are within <close_s>
-              seconds of each other.
+              seconds of each other, and a total duration at least
+              <duration_s> seconds.
           """);
         System.exit(2);
       }
