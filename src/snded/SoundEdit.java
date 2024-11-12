@@ -188,67 +188,41 @@ public class SoundEdit {
     float[] samples = getSamples(audio);
     System.out.println("total samples: " + samples.length);
 
+    float frameRate = audio.getFormat().getFrameRate();
+
     int closenessThreshold_samples =
       secondsToSamples(audio, closenessThreshold_s);
     System.out.println(
       "closenessThreshold_samples: " + closenessThreshold_samples);
 
-    // True if we have a current sound being accumulated.
-    boolean haveSound = false;
-
-    // If `haveSound`, the sample index of the loud sample at the start
-    // of the current sound.
-    int soundStart = -1;
-
-    // If `haveSound`, the sample index of the previous loud sample.
-    int prevLoudIndex = -1;
-
-    // If `haveSound`, the maximum loudness of the current sound, in
-    // decibels.
-    float soundMaxLoudness = -100.0f;
+    // Non-null if we have a current sound being accumulated.
+    Sound curSound = null;
 
     for (int i=0; i < samples.length; ++i) {
       float dB = linearToDecibels(samples[i]);
 
       if (dB > loudnessThreshold_dB) {
-        // Will we continue the current sound?
-        boolean continueSound =
-          haveSound &&
-          i - prevLoudIndex <= closenessThreshold_samples;
-
-        if (continueSound) {
-          prevLoudIndex = i;
-          soundMaxLoudness = Math.max(soundMaxLoudness, dB);
+        // Continue the current sound?
+        if ((curSound != null) &&
+            i - curSound.m_endFrame <= closenessThreshold_samples) {
+          curSound.extend(i, dB);
         }
 
         else {
-          if (haveSound) {
+          if (curSound != null) {
             // Emit the current sound.
-            float duration_s =
-              samplesToSeconds(audio, prevLoudIndex - soundStart);
-            System.out.println(
-              "sound [" + soundStart + ", " + prevLoudIndex +
-              "]: maxLoud = " + soundMaxLoudness + " dB, " +
-              "duration = " + duration_s + " s");
+            curSound.printWithDuration(frameRate);
           }
 
           // Start a new sound.
-          soundStart = i;
-          prevLoudIndex = i;
-          soundMaxLoudness = dB;
-          haveSound = true;
+          curSound = new Sound(i, i, dB);
         }
       }
     }
 
-    if (haveSound) {
+    if (curSound != null) {
       // Emit the final sound.
-      float duration_s =
-        samplesToSeconds(audio, prevLoudIndex - soundStart);
-      System.out.println(
-        "sound [" + soundStart + ", " + prevLoudIndex +
-        "]: maxLoud = " + soundMaxLoudness + " dB, " +
-        "duration = " + duration_s + " s");
+      curSound.printWithDuration(frameRate);
     }
   }
 
