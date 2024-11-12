@@ -42,6 +42,22 @@ public class Sound {
     m_maxLoudness_dB = Math.max(m_maxLoudness_dB, loudness_dB);
   }
 
+  // Return the distance from `frameNum` to the nearest endpoint of this
+  // sound.  Returns 0 if the frame is within the sound bounds.  The
+  // result is never negative.
+  public long distanceToEndpoint(long frameNum)
+  {
+    if (frameNum < m_startFrame) {
+      return m_startFrame - frameNum;
+    }
+    else if (frameNum > m_endFrame) {
+      return frameNum - m_endFrame;
+    }
+    else {
+      return 0;
+    }
+  }
+
   // Print sound details, including duration in seconds.
   public void printWithDuration(float frameRate)
   {

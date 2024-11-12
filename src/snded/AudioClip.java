@@ -105,7 +105,7 @@ public class AudioClip {
     return m_samples[Math.toIntExact(frameIndex * numChannels() + channel)];
   }
 
-  public void getFCSample(long frameIndex, int channel, float newValue)
+  public void setFCSample(long frameIndex, int channel, float newValue)
   {
     assert(0 <= frameIndex && frameIndex < numFrames());
     assert(0 <= channel && channel < numChannels());

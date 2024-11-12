@@ -40,6 +40,7 @@ check: dist/snded.jar
 	./snded soft-click.wav bytes 4
 	./snded soft-click.wav samples 4
 	./snded soft-click.wav sounds -60 0.0002 0.0005
+	./snded soft-click.wav declick soft-click-declick.wav -60 0.0002 0.0005
 
 
 .PHONY: clean all check

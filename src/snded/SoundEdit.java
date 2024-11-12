@@ -13,6 +13,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 
 
@@ -170,18 +171,93 @@ public class SoundEdit {
 
   // Silence everything but identified sounds that are at least
   // `durationThreshold_s` seconds long.
+  //
+  // Whenever a frame is within the endpoints of a sound, or within
+  // `closenessThreshold_s/2` of an endpoint, it is kept at its full
+  // amplitude.
+  //
+  // Whenever a frame is more than `closenessThreshold_s` away from an
+  // endpoint, it is silenced entirely.
+  //
+  // In between those, meaning the distance to an endpoint is between
+  // `closenessThreshold_s` and `closenesThreshold_s/2`, the samples in
+  // the frame are scaled linearly.
+  //
   public void declick(
     AudioClip audio,
+    String outFname,
     float loudnessThreshold_dB,
     float closenessThreshold_s,
     float durationThreshold_s)
+      throws IOException
   {
+    int closenessThreshold_frames =
+      (int)(closenessThreshold_s * audio.getFrameRate());
+
     List<Sound> sounds = findSounds(audio,
       loudnessThreshold_dB,
       closenessThreshold_s,
       durationThreshold_s);
 
-    // TODO
+    Iterator<Sound> soundIter = sounds.iterator();
+
+    // Sound we are closest to, or null if none.
+    Sound curSound = (soundIter.hasNext()? soundIter.next() : null);
+
+    // Sound after that one, if any.
+    Sound nextSound = (soundIter.hasNext()? soundIter.next() : null);
+
+    // Process all the frames in the clip.
+    for (long frameNum=0; frameNum < audio.numFrames(); ++frameNum) {
+      // Advance to next sound?
+      if (nextIsCloser(curSound, nextSound, frameNum)) {
+        // Yes.
+        curSound = nextSound;
+        nextSound = (soundIter.hasNext()? soundIter.next() : null);
+      }
+
+      // Amount by which to amplify the samples in this frame.
+      float amplification;
+
+      if (curSound != null) {
+        long distance = curSound.distanceToEndpoint(frameNum);
+        if (distance < closenessThreshold_frames/2) {
+          // Retain full amplitude.
+          amplification = 1.0f;
+        }
+        else if (distance > closenessThreshold_frames) {
+          // Silence entirely.
+          amplification = 0.0f;
+        }
+        else {
+          // Scale linearly.
+          amplification =
+            ((closenessThreshold_frames - distance) * 2) /
+            (float)closenessThreshold_frames;
+        }
+      }
+      else {
+        // Not near a sound, silence.
+        amplification = 0.0f;
+      }
+
+      for (int c=0; c < audio.numChannels(); ++c) {
+        audio.setFCSample(frameNum, c,
+          audio.getFCSample(frameNum, c) * amplification);
+      }
+    }
+
+    // Write the result to the specified file.
+    copyToFile(audio, outFname);
+  }
+
+  // Helper for `declick`.
+  private boolean nextIsCloser(Sound curSound, Sound nextSound, long frameNum)
+  {
+    return
+      curSound != null &&
+      nextSound != null &&
+      curSound.distanceToEndpoint(frameNum) > nextSound.distanceToEndpoint(frameNum);
   }
 
   public void parseCommand(AudioClip audio, String command, String[] args)
@@ -208,6 +284,15 @@ public class SoundEdit {
           Float.valueOf(args[0]),
           Float.valueOf(args[1]),
           Float.valueOf(args[2]));
+        break;
+
+      case "declick":
+        requireArgs(args, 4);
+        declick(audio,
+          args[0],
+          Float.valueOf(args[1]),
+          Float.valueOf(args[2]),
+          Float.valueOf(args[3]));
         break;
 
       default:
@@ -253,6 +338,9 @@ public class SoundEdit {
               samples louder than <loud_dB> that are within <close_s>
               seconds of each other, and a total duration at least
               <duration_s> seconds.
+
+            declick <outFname> <loud_dB> <close_s> <duration_s>
+              Silence everything that "sounds" does not report.
           """);
         System.exit(2);
       }
