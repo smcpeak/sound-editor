@@ -16,7 +16,9 @@ import javax.sound.sampled.AudioSystem;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 public class SoundEdit {
   public static int getBytesPerSample(AudioInputStream audio)
@@ -171,7 +173,7 @@ public class SoundEdit {
   }
 
   // Attempt to identify discrete sounds in the input.
-  public void findSounds(
+  public List<Sound> findSounds(
     // Audio to process.
     AudioInputStream audio,
 
@@ -186,7 +188,6 @@ public class SoundEdit {
     throws IOException
   {
     float[] samples = getSamples(audio);
-    System.out.println("total samples: " + samples.length);
 
     // This code is intended to work correctly with multi-channel data,
     // but I haven't actually tested with more than one.
@@ -197,8 +198,9 @@ public class SoundEdit {
 
     int closenessThreshold_frames =
       (int)(closenessThreshold_s * frameRate);
-    System.out.println(
-      "closenessThreshold_frames: " + closenessThreshold_frames);
+
+    // List of all discovered sounds.
+    List<Sound> sounds = new ArrayList<Sound>();
 
     // Non-null if we have a current sound being accumulated.
     Sound curSound = null;
@@ -224,7 +226,7 @@ public class SoundEdit {
         else {
           if (curSound != null) {
             // Emit the current sound.
-            curSound.printWithDuration(frameRate);
+            sounds.add(curSound);
           }
 
           // Start a new sound.
@@ -235,7 +237,21 @@ public class SoundEdit {
 
     if (curSound != null) {
       // Emit the final sound.
-      curSound.printWithDuration(frameRate);
+      sounds.add(curSound);
+    }
+
+    return sounds;
+  }
+
+  // Print the sounds that `findSounds` finds.
+  public void printSounds(
+    AudioInputStream audio,
+    float loudnessThreshold_dB,
+    float closenessThreshold_s) throws IOException
+  {
+    List<Sound> sounds = findSounds(audio, loudnessThreshold_dB, closenessThreshold_s);
+    for (Sound s : sounds) {
+      s.printWithDuration(audio.getFormat().getFrameRate());
     }
   }
 
@@ -264,7 +280,7 @@ public class SoundEdit {
 
       case "sounds":
         requireArgs(args, 2);
-        findSounds(audio, Float.valueOf(args[0]), Float.valueOf(args[1]));
+        printSounds(audio, Float.valueOf(args[0]), Float.valueOf(args[1]));
         break;
 
       default:
