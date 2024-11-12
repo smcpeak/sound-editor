@@ -1,61 +1,27 @@
 // SoundEdit.java
-// Simple sound editor.
 
 package snded;
 
 import util.StringUtil;
 import util.Util;
 
-import mcve.audio.SimpleAudioConversion;
-
-import javax.sound.sampled.AudioFileFormat;
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
 
-import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+
+// Simple sound editor.
 public class SoundEdit {
-  public static int getBytesPerSample(AudioInputStream audio)
-  {
-    AudioFormat fmt = audio.getFormat();
-    int ret = SimpleAudioConversion.bytesPerSample(fmt.getSampleSizeInBits());
-    assert(ret > 0);
-    return ret;
-  }
-
-  // Read all of the samples from `audio` into an array of `float`.
-  //
-  // For stereo audio, the samples are interleaved as (L,R) pairs.
-  //
-  public float[] getSamples(AudioInputStream audio) throws IOException
-  {
-    AudioFormat fmt = audio.getFormat();
-    int bytesPerSample = getBytesPerSample(audio);
-
-    int numBytesAvail = audio.available();
-    byte[] bytes = new byte[numBytesAvail];
-    int numBytesRead = audio.read(bytes);
-
-    int numSamples = numBytesRead / bytesPerSample;
-
-    float[] samples = new float[numSamples];
-    int numConvertedSamples = SimpleAudioConversion.decode(
-      bytes,
-      samples,
-      numBytesRead,
-      fmt);
-    assert(numConvertedSamples == numSamples);
-
-    return samples;
-  }
-
-  public void printBytes(AudioInputStream audio, int maxBytes) throws IOException
+  // This does not use the `AudioClip` class because it directly
+  // accesses the bytes, not the decoded samples.
+  public void printBytes(AudioInputStream audio, int maxBytes)
+    throws IOException
   {
     AudioFormat fmt = audio.getFormat();
 
@@ -70,7 +36,7 @@ public class SoundEdit {
     }
   }
 
-  public void printInfo(AudioInputStream audio) throws IOException
+  public void printInfo(AudioClip audio)
   {
     AudioFormat fmt = audio.getFormat();
     System.out.println("format: " + fmt);
@@ -82,100 +48,39 @@ public class SoundEdit {
     System.out.println("is big endian: " + fmt.isBigEndian());
     System.out.println("properties: " + fmt.properties());
 
-    int bytesPerSample = getBytesPerSample(audio);
-    System.out.println("bytes per sample: " + bytesPerSample);
+    System.out.println("bytes per sample: " + audio.bytesPerSample());
 
-    System.out.println("available: " + audio.available());
-    System.out.println("frame length: " + audio.getFrameLength());
+    System.out.println("num frames: " + audio.numFrames());
+    System.out.println("num samples: " + audio.numSamples());
   }
 
-  // Convert `sample`, nominally in [-1,1], to the "decibel" measure
-  // that Audacity uses.  Note that this does not preserve information
-  // because the output does not indicate the sign of the input.
-  public float linearToDecibels(float sample)
+  public void printSamples(AudioClip audio, int maxSamples)
   {
-    if (sample == 0.0f) {
-      // `log10` is not defined on zero.  Use a very negative number of
-      // decibels.  I've seen at least one place in Audacity that uses
-      // the same value for a similar purpose.
-      return -100.0f;
-    }
-    else {
-      // Decibels are defined using the log of a ratio to a reference
-      // level.  Here, the reference level is 1.
-      //
-      // Multiplying by 20 (rather than 10 as the name would suggest) is
-      // related to the distinction between power and amplitude, but I
-      // don't know the details.
-      //
-      return (float)(20.0 * Math.log10(Math.abs(sample)));
-    }
-  }
+    System.out.println("read " + audio.numSamples() + " samples:");
 
-  public void printSamples(AudioInputStream audio, int maxSamples)
-    throws IOException
-  {
-    float[] samples = getSamples(audio);
-
-    System.out.println("read " + samples.length + " samples:");
-
-    for (int i=0; i < maxSamples && i < samples.length; ++i) {
-      float f = samples[i];
-      float decibels = linearToDecibels(f);
+    for (long i=0; i < maxSamples && i < audio.numSamples(); ++i) {
+      float f = audio.getSample(i);
+      float decibels = AudioClip.linearToDecibels(f);
 
       System.out.println("  sample " + i + ": " + f + "  \t" +
                          decibels + " dB");
     }
   }
 
-  // Read the data into an array of samples, then write them back out
-  // without any intervening processing.  This is meant, in part, to
-  // check that doing no-op processing preserves the information.
-  public void readWrite(AudioInputStream audio, String outFname)
+  // Write the samples back out to a WAV file without any intervening
+  // processing.  This is meant, in part, to check that doing no-op
+  // processing preserves the information.
+  public void copyToFile(AudioClip audio, String outFname)
     throws IOException
   {
-    AudioFormat fmt = audio.getFormat();
-
-    // Convert bytes into floats.
-    float[] samples = getSamples(audio);
-
-    // Convert floats back into bytes.
-    int bytesPerSample = getBytesPerSample(audio);
-    int numBytes = samples.length * bytesPerSample;
-    byte[] bytes = new byte[numBytes];
-    int numConvertedBytes =
-      SimpleAudioConversion.encode(samples, bytes, samples.length, fmt);
-    assert(numConvertedBytes == numBytes);
-
-    // Wrap the bytes in streams to provide them.
-    try (ByteArrayInputStream bais = new ByteArrayInputStream(bytes)) {
-      try (AudioInputStream ais = new AudioInputStream(bais, fmt, bytes.length)) {
-
-        // Write the output file.
-        AudioSystem.write(ais, AudioFileFormat.Type.WAVE, new File(outFname));
-        System.out.println("wrote " + outFname);
-      }
-    }
-  }
-
-  public int secondsToSamples(AudioInputStream audio, float seconds)
-  {
-    AudioFormat fmt = audio.getFormat();
-
-    return (int)(seconds * fmt.getSampleRate());
-  }
-
-  public float samplesToSeconds(AudioInputStream audio, int samples)
-  {
-    AudioFormat fmt = audio.getFormat();
-
-    return (float)samples / fmt.getSampleRate();
+    audio.writeToFile(outFname);
+    System.out.println("wrote " + outFname);
   }
 
   // Attempt to identify discrete sounds in the input.
   public List<Sound> findSounds(
     // Audio to process.
-    AudioInputStream audio,
+    AudioClip audio,
 
     // Any sample this loud or louder (measured in decibels) will be
     // considered loud enough to anchor a sound.
@@ -189,17 +94,12 @@ public class SoundEdit {
     // (measured in seconds), discard it.  If this is zero, then nothing
     // is discarded.
     float durationThreshold_s)
-
-    throws IOException
   {
-    float[] samples = getSamples(audio);
-
     // This code is intended to work correctly with multi-channel data,
     // but I haven't actually tested with more than one.
-    AudioFormat fmt = audio.getFormat();
-    float frameRate = fmt.getFrameRate();
-    int numChannels = fmt.getChannels();
-    int numFrames = samples.length / numChannels;
+    float frameRate = audio.getFrameRate();
+    int numChannels = audio.numChannels();
+    long numFrames = audio.numFrames();
 
     int closenessThreshold_frames =
       (int)(closenessThreshold_s * frameRate);
@@ -216,10 +116,9 @@ public class SoundEdit {
       // Get maximum loudness over all channels.
       float dB;
       {
-        int sampleNum = frameNum * numChannels;
-        dB = linearToDecibels(samples[sampleNum]);
+        dB = audio.getFCDecibels(frameNum, 0);
         for (int c=1; c < numChannels; ++c) {
-          dB = Math.max(dB, linearToDecibels(samples[sampleNum + c]));
+          dB = Math.max(dB, audio.getFCDecibels(frameNum, c));
         }
       }
 
@@ -254,10 +153,10 @@ public class SoundEdit {
 
   // Print the sounds that `findSounds` finds.
   public void printSounds(
-    AudioInputStream audio,
+    AudioClip audio,
     float loudnessThreshold_dB,
     float closenessThreshold_s,
-    float durationThreshold_s) throws IOException
+    float durationThreshold_s)
   {
     List<Sound> sounds = findSounds(audio,
       loudnessThreshold_dB,
@@ -272,12 +171,10 @@ public class SoundEdit {
   // Silence everything but identified sounds that are at least
   // `durationThreshold_s` seconds long.
   public void declick(
-    AudioInputStream audio,
+    AudioClip audio,
     float loudnessThreshold_dB,
     float closenessThreshold_s,
     float durationThreshold_s)
-
-    throws IOException
   {
     List<Sound> sounds = findSounds(audio,
       loudnessThreshold_dB,
@@ -287,17 +184,12 @@ public class SoundEdit {
     // TODO
   }
 
-  public void parseCommand(AudioInputStream audio, String command, String[] args)
+  public void parseCommand(AudioClip audio, String command, String[] args)
     throws IOException
   {
     switch (command) {
       case "info":
         printInfo(audio);
-        break;
-
-      case "bytes":
-        requireArgs(args, 1);
-        printBytes(audio, Integer.valueOf(args[0]));
         break;
 
       case "samples":
@@ -307,7 +199,7 @@ public class SoundEdit {
 
       case "copy":
         requireArgs(args, 1);
-        readWrite(audio, args[0]);
+        copyToFile(audio, args[0]);
         break;
 
       case "sounds":
@@ -326,7 +218,7 @@ public class SoundEdit {
 
   // If `args` has fewer than `numRequired` elements, throw a
   // `RuntimeException`.
-  public void requireArgs(String args[], int numRequired)
+  public static void requireArgs(String args[], int numRequired)
   {
     if (args.length < numRequired) {
       throw new RuntimeException(
@@ -369,8 +261,18 @@ public class SoundEdit {
       String command = args[1];
       String[] cmdArgs = Arrays.copyOfRange(args, 2, args.length);
 
-      try (AudioInputStream audio = AudioSystem.getAudioInputStream(new File(fname))) {
-        se.parseCommand(audio, command, cmdArgs);
+      try (AudioInputStream ais = AudioSystem.getAudioInputStream(new File(fname))) {
+        // The "bytes" command is special because it operates on the
+        // stream directly.
+        if (command.equals("bytes")) {
+          requireArgs(cmdArgs, 1);
+          se.printBytes(ais, Integer.valueOf(cmdArgs[0]));
+        }
+        else {
+          // All other commands operate on the clip.
+          AudioClip audio = new AudioClip(ais);
+          se.parseCommand(audio, command, cmdArgs);
+        }
       }
     }
     catch (Exception e) {
