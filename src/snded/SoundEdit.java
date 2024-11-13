@@ -91,12 +91,7 @@ public class SoundEdit {
 
     // If two loud samples are this close (measured in seconds), then
     // they are considered to be part of the same sound.
-    float closenessThreshold_s,
-
-    // If a sound would be created but it is shorter than this duration
-    // (measured in seconds), discard it.  If this is zero, then nothing
-    // is discarded.
-    float durationThreshold_s)
+    float closenessThreshold_s)
   {
     // This code is intended to work correctly with multi-channel data,
     // but I haven't actually tested with more than one.
@@ -106,8 +101,6 @@ public class SoundEdit {
 
     int closenessThreshold_frames =
       (int)(closenessThreshold_s * frameRate);
-    int durationThreshold_frames =
-      (int)(durationThreshold_s * frameRate);
 
     // List of all discovered sounds.
     List<Sound> sounds = new ArrayList<Sound>();
@@ -133,8 +126,7 @@ public class SoundEdit {
         }
 
         else {
-          if (curSound != null &&
-              curSound.frameDuration() >= durationThreshold_frames) {
+          if (curSound != null) {
             // Emit the current sound.
             sounds.add(curSound);
           }
@@ -145,8 +137,7 @@ public class SoundEdit {
       }
     }
 
-    if (curSound != null &&
-        curSound.frameDuration() >= durationThreshold_frames) {
+    if (curSound != null) {
       // Emit the final sound.
       sounds.add(curSound);
     }
@@ -159,16 +150,41 @@ public class SoundEdit {
     AudioClip audio,
     float loudnessThreshold_dB,
     float closenessThreshold_s,
+
+    // If a is shorter than this duration (measured in seconds), ignore
+    // it.  If it is zero then no duration filtering occurs.
     float durationThreshold_s)
   {
     List<Sound> sounds = findSounds(audio,
       loudnessThreshold_dB,
-      closenessThreshold_s,
-      durationThreshold_s);
+      closenessThreshold_s);
+
+    sounds = filterSoundDuration(sounds, audio, durationThreshold_s);
 
     for (Sound s : sounds) {
       s.printWithDuration(audio.getFormat().getFrameRate());
     }
+  }
+
+  // Filter `origSounds`, returning only those whose duration is at
+  // least `durationThreshold_s`.
+  private List<Sound> filterSoundDuration(
+    List<Sound> origSounds,
+    AudioClip audio,
+    float durationThreshold_s)
+  {
+    List<Sound> ret = new ArrayList<Sound>();
+
+    int durationThreshold_frames =
+      (int)(durationThreshold_s * audio.getFrameRate());
+
+    for (Sound s : origSounds) {
+      if (s.frameDuration() >= durationThreshold_frames) {
+        ret.add(s);
+      }
+    }
+
+    return ret;
   }
 
   // Silence everything but identified sounds that are at least
@@ -198,8 +214,9 @@ public class SoundEdit {
 
     List<Sound> sounds = findSounds(audio,
       loudnessThreshold_dB,
-      closenessThreshold_s,
-      durationThreshold_s);
+      closenessThreshold_s);
+
+    sounds = filterSoundDuration(sounds, audio, durationThreshold_s);
 
     Iterator<Sound> soundIter = sounds.iterator();
 
