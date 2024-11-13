@@ -1,6 +1,14 @@
+# .gitignore
+
+# Compilation outputs.
 bin
 dist
-junk
+
+# Test outputs.
 out
+
+# Ad-hoc files for experiments, etc.
+exp
 *.out
-*.wav
+
+# EOF

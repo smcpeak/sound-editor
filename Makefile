@@ -38,11 +38,12 @@ dist/snded.jar: $(JAVA_FILES)
 .PHONY: check
 check: dist/snded.jar
 	$(JAVA) -cp bin snded.FFTTest
-	./snded soft-click.wav info
-	./snded soft-click.wav bytes 4
-	./snded soft-click.wav samples 4
-	./snded soft-click.wav sounds -60 0.0002 0.0005
-	./snded soft-click.wav declick soft-click-declick.wav -60 0.0002 0.0005
+	./snded test-data/soft-click.wav info
+	./snded test-data/soft-click.wav bytes 4
+	./snded test-data/soft-click.wav samples 4
+	./snded test-data/soft-click.wav sounds -60 0.0002 0.0005
+	mkdir -p out
+	./snded test-data/soft-click.wav declick out/soft-click-declick.wav -60 0.0002 0.0005
 	./snded test-data/sine-440hz.wav freqBins
 	./snded test-data/sine-440hz-and-4000hz.wav freqBins
 
