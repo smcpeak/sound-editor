@@ -262,60 +262,46 @@ public class SoundEdit {
       curSound.distanceToEndpoint(frameNum) > nextSound.distanceToEndpoint(frameNum);
   }
 
-  public void frequencyAnalysis(AudioClip audio)
+  public void frequencyAnalysis(AudioClip audio, int windowSize)
   {
-    int windowSize = 1024;
-    if (audio.numFrames() < windowSize) {
-      // It's not hard, I just need to add it.
-      System.out.println("cannot analyze fewer than " + windowSize + " samples");
-      return;
-    }
-
-    // Compute the power spectrum.  The output has `windowSize/2`
+    // Compute the decibel spectrum.  The output has `windowSize/2`
     // elements.
-    double[] power = powerSpectrum(audio, windowSize);
+    double[] decibels = powerSpectrumDecibels(audio, windowSize);
 
-    // Convert power to decibels.
-    double[] decibels = new double[power.length];
-    {
-      for (int i=0; i < power.length; ++i) {
-        decibels[i] = AudioClip.linearPowerToDecibels(power[i]);
-      }
+    // Print the frequency spectrum.
+    System.out.printf("  freq       dB  dB stars\n");
+    System.out.printf("------  -------  ----------\n");
+
+    for (int i=0; i < decibels.length; ++i) {
+      double elementFreq = spectrumElementFrequency(audio, i, windowSize);
+      double dB = decibels[i];
+
+      // Graphically represent the dB level as a number of stars,
+      // where <= -100 is 0, (-100,-90] is 1, etc.
+      int numStars = (int)Math.floor((dB + 110.0) / 10.0);
+      String stars = (
+        numStars > 0?
+          "  " + "*".repeat(numStars) :
+          ""
+      );
+
+      System.out.printf("%1$6.0f  %2$7.2f%3$s\n",
+        elementFreq,
+        dB,
+        stars);
     }
+  }
 
-    // Print the frequency power spectrum.
-    final boolean debug = true;
-    if (debug) {
-      System.out.printf("  freq         power       dB  dB stars\n");
-      System.out.printf("------  ------------  -------  ----------\n");
-
-      for (int i=0; i < power.length; ++i) {
-        double elementFreq = spectrumElementFrequency(audio, i, windowSize);
-        double dB = decibels[i];
-
-        // Graphically represent the dB level as a number of stars,
-        // where <= -100 is 0, (-100,-90] is 1, etc.
-        int numStars = (int)Math.floor((dB + 110.0) / 10.0);
-        String stars = (
-          numStars > 0?
-            "  " + "*".repeat(numStars) :
-            ""
-        );
-
-        System.out.printf("%1$6.0f  %2$12.6f  %3$7.2f%4$s\n",
-          elementFreq,
-          power[i],
-          decibels[i],
-          stars);
-      }
-    }
+  public void frequencyAnalysisBins(AudioClip audio, int windowSize)
+  {
+    double[] decibels = powerSpectrumDecibels(audio, windowSize);
 
     // Find the maximum power within a logarithmic set of bins, one for
     // every factor of 10 Hz.
     int numFrequencyBins = 5;
     double[] maxDecibelsForBin = new double[numFrequencyBins];
     Arrays.fill(maxDecibelsForBin, -100.0);
-    for (int i=0; i < power.length; ++i) {
+    for (int i=0; i < decibels.length; ++i) {
       double elementFreq = spectrumElementFrequency(audio, i, windowSize);
       double dB = decibels[i];
 
@@ -336,7 +322,7 @@ public class SoundEdit {
     }
 
     // Print the resulting frequency distribution.
-    System.out.println("frequency distribution:");
+    System.out.println("binned frequency distribution:");
     for (int fbin=0; fbin < numFrequencyBins; ++fbin) {
       double upperFreq = Math.pow(10, fbin+1);
 
@@ -358,8 +344,9 @@ public class SoundEdit {
     return (double)elementIndex / (double)windowSize * audio.getFrameRate();
   }
 
-  // Return an array of power values.  Element `i` describes the power
-  // of the fourier component with frequency `(i/windowSize)*frameRate`.
+  // Return an array of power values expressed linearly.  Element `i`
+  // describes the power of the fourier component with frequency
+  // `(i/windowSize)*frameRate`.
   //
   // `windowSize` must be a power of two.
   //
@@ -373,7 +360,7 @@ public class SoundEdit {
   // values as merely comparable as ratios to some other nominal
   // "maximum" power.
   //
-  public double[] powerSpectrum(AudioClip audio, int windowSize)
+  public double[] powerSpectrumLinear(AudioClip audio, int windowSize)
   {
     assert(windowSize > 1);
 
@@ -438,6 +425,25 @@ public class SoundEdit {
     }
 
     return power;
+  }
+
+  // Compute a frequency power spectrum with the results expressed in
+  // decibels.
+  public double[] powerSpectrumDecibels(AudioClip audio, int windowSize)
+  {
+    // Compute the power spectrum.  The output has `windowSize/2`
+    // elements.
+    double[] power = powerSpectrumLinear(audio, windowSize);
+
+    // Convert power to decibels.
+    double[] decibels = new double[power.length];
+    {
+      for (int i=0; i < power.length; ++i) {
+        decibels[i] = AudioClip.linearPowerToDecibels(power[i]);
+      }
+    }
+
+    return decibels;
   }
 
   // Return a factor by which to scale a sample depending on where it is
@@ -528,7 +534,11 @@ public class SoundEdit {
         break;
 
       case "freq":
-        frequencyAnalysis(audio);
+        frequencyAnalysis(audio, 1024);
+        break;
+
+      case "freqBins":
+        frequencyAnalysisBins(audio, 1024);
         break;
 
       default:
@@ -579,7 +589,10 @@ public class SoundEdit {
               Silence everything that "sounds" does not report.
 
             freq
-              Print frequency distribution.
+              Print frequency spectrum.
+
+            freqBins
+              Bin the frequency spectrum at 10x logarithmic intervals.
 
           """);
         System.exit(2);

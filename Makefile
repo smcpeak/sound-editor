@@ -43,6 +43,8 @@ check: dist/snded.jar
 	./snded soft-click.wav samples 4
 	./snded soft-click.wav sounds -60 0.0002 0.0005
 	./snded soft-click.wav declick soft-click-declick.wav -60 0.0002 0.0005
+	./snded test-data/sine-440hz.wav freqBins
+	./snded test-data/sine-440hz-and-4000hz.wav freqBins
 
 
 .PHONY: clean all check
