@@ -498,47 +498,91 @@ public class SoundEdit {
     return R*R + I*I;
   }
 
+  // Command line help string.
+  private static final String usageString =
+    """
+    usage: snded <file.wav> <command> [<params>]
+
+    The <params> are a sequence of <name>:<value> pairs in any
+    order.  Some have default values, indicated in parentheses,
+    making them optional.
+
+    commands:
+      info
+        Print some details about the given file.
+
+      bytes [max:int(10)]
+        Print up to <max> bytes of sample data.
+
+      samples [max:int(10)]
+        Print up to <max> samples.
+
+      copy [out:string]
+        Copy the file by decoding then re-encoding the samples.
+
+      sounds [loud_dB:float(-40)] [close_s:float(0.2)]
+             [duration_s:float(0.09)]
+        Report on the set of discrete sounds, where a "sound" has
+        samples louder than <loud_dB> that are within <close_s>
+        seconds of each other, and a total duration at least
+        <duration_s> seconds.
+
+      declick [out:string] [loud_dB:float(-40)]
+              [close_s:float(0.2)] [duration_s:float(0.09)]
+        Silence everything that "sounds" does not report.
+
+      freq [windowSize:int(1024)]
+        Print frequency spectrum.
+
+      freqBins  [windowSize:int(1024)]
+        Bin the frequency spectrum at 10x logarithmic intervals.
+
+    """;
+
   public void parseCommand(AudioClip audio, String command, String[] args)
     throws IOException
   {
+    // Parse the argument as "<name>:<value>" pairs.
+    ArgMap argMap = new ArgMap(args);
+
     switch (command) {
       case "info":
         printInfo(audio);
         break;
 
       case "samples":
-        requireArgs(args, 1);
-        printSamples(audio, Integer.valueOf(args[0]));
+        printSamples(audio,
+          argMap.getInt("max", 10));
         break;
 
       case "copy":
-        requireArgs(args, 1);
-        copyToFile(audio, args[0]);
+        copyToFile(audio,
+          argMap.getRequiredString("out"));
         break;
 
       case "sounds":
-        requireArgs(args, 3);
         printSounds(audio,
-          Float.valueOf(args[0]),
-          Float.valueOf(args[1]),
-          Float.valueOf(args[2]));
+          argMap.getFloat("loud_dB", -40.0f),
+          argMap.getFloat("close_s", 0.2f),
+          argMap.getFloat("duration_s", 0.09f));
         break;
 
       case "declick":
-        requireArgs(args, 4);
         declick(audio,
-          args[0],
-          Float.valueOf(args[1]),
-          Float.valueOf(args[2]),
-          Float.valueOf(args[3]));
+          argMap.getRequiredString("out"),
+          argMap.getFloat("loud_dB", -40.0f),
+          argMap.getFloat("close_s", 0.2f),
+          argMap.getFloat("duration_s", 0.09f));
         break;
 
       case "freq":
-        frequencyAnalysis(audio, 1024);
+        frequencyAnalysis(audio,
+          argMap.getInt("windowSize", 1024));
         break;
 
       case "freqBins":
-        frequencyAnalysisBins(audio, 1024);
+        frequencyAnalysisBins(audio,
+          argMap.getInt("windowSize", 1024));
         break;
 
       default:
@@ -547,54 +591,12 @@ public class SoundEdit {
     }
   }
 
-  // If `args` has fewer than `numRequired` elements, throw a
-  // `RuntimeException`.
-  public static void requireArgs(String args[], int numRequired)
-  {
-    if (args.length < numRequired) {
-      throw new RuntimeException(
-        "Command requires at least " + numRequired + " arguments.");
-    }
-  }
-
   public static void main(String args[])
   {
     SoundEdit se = new SoundEdit();
     try {
       if (args.length < 2) {
-        System.err.print(
-          """
-          usage: snded <file.wav> <command> [<args>]
-
-          commands:
-            info
-              Print some details about the given file.
-
-            bytes <N>
-              Print up to N bytes of sample data.
-
-            samples <N>
-              Print up to N samples.
-
-            copy <outFname>
-              Copy the file by decoding then re-encoding the samples.
-
-            sounds <loud_dB> <close_s> <duration_s>
-              Report on the set of discrete sounds, where a "sound" has
-              samples louder than <loud_dB> that are within <close_s>
-              seconds of each other, and a total duration at least
-              <duration_s> seconds.
-
-            declick <outFname> <loud_dB> <close_s> <duration_s>
-              Silence everything that "sounds" does not report.
-
-            freq
-              Print frequency spectrum.
-
-            freqBins
-              Bin the frequency spectrum at 10x logarithmic intervals.
-
-          """);
+        System.err.print(usageString);
         System.exit(2);
       }
 
@@ -606,8 +608,9 @@ public class SoundEdit {
         // The "bytes" command is special because it operates on the
         // stream directly.
         if (command.equals("bytes")) {
-          requireArgs(cmdArgs, 1);
-          se.printBytes(ais, Integer.valueOf(cmdArgs[0]));
+          ArgMap argMap = new ArgMap(cmdArgs);
+          se.printBytes(ais,
+            argMap.getInt("max", 10));
         }
         else {
           // All other commands operate on the clip.
