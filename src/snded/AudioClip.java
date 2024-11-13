@@ -116,7 +116,7 @@ public class AudioClip {
   // Return the decibel level for the given frame and channel.
   public float getFCDecibels(long frameIndex, int channel)
   {
-    return linearToDecibels(getFCSample(frameIndex, channel));
+    return linearAmplitudeToDecibels(getFCSample(frameIndex, channel));
   }
 
   // Bytes for one sample.  For 16-bit audio, which is very common, this
@@ -139,11 +139,9 @@ public class AudioClip {
   // that Audacity uses.  Note that this does not preserve information
   // because the output does not indicate the sign of the input.
   //
-  // TODO: Rename to indicate this is for amplitude.
-  //
   // TODO: Operate on doubles.
   //
-  public static float linearToDecibels(float sample)
+  public static float linearAmplitudeToDecibels(float sample)
   {
     if (sample == 0.0f) {
       // `log10` is not defined on zero.  Use a very negative number of
@@ -166,7 +164,7 @@ public class AudioClip {
   // Decibel conversion for power.
   public static double linearPowerToDecibels(double sample)
   {
-    return linearToDecibels((float)sample) / 2;
+    return linearAmplitudeToDecibels((float)sample) / 2;
   }
 
   // Convert floats back into bytes.

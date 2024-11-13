@@ -63,7 +63,7 @@ public class SoundEdit {
 
     for (long i=0; i < maxSamples && i < audio.numSamples(); ++i) {
       float f = audio.getSample(i);
-      float decibels = AudioClip.linearToDecibels(f);
+      float decibels = AudioClip.linearAmplitudeToDecibels(f);
 
       System.out.println("  sample " + i + ": " + f + "  \t" +
                          decibels + " dB");
