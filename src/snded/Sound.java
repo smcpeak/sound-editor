@@ -65,10 +65,28 @@ public class Sound {
     float duration_s =
       (float)frameDuration() / frameRate;
 
+    System.out.println("sound{");
+
     System.out.println(
-      "sound [" + m_startFrame + ", " + m_endFrame +
-      "]: maxLoud = " + m_maxLoudness_dB + " dB, " +
-      "duration = " + duration_s + " s");
+      "  interval_s: (" + framesToTimeString(m_startFrame, frameRate) +
+      " " + framesToTimeString(m_endFrame, frameRate) + ")");
+
+    System.out.println(
+      "  duration_s: " + framesToTimeString(frameDuration(), frameRate));
+
+    System.out.format(
+      "  maxLoudness_dB: %1$.3f\n", m_maxLoudness_dB);
+
+    System.out.println("}");
+  }
+
+  // Return `frame` expressed as seconds, as a string.
+  private String framesToTimeString(long frames, float frameRate)
+  {
+    // Convert to seconds.
+    float duration_s = frames / frameRate;
+
+    return String.format("%1$.3f", duration_s);
   }
 }
 
