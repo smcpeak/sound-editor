@@ -138,6 +138,11 @@ public class AudioClip {
   // Convert `sample`, nominally in [-1,1], to the "decibel" measure
   // that Audacity uses.  Note that this does not preserve information
   // because the output does not indicate the sign of the input.
+  //
+  // TODO: Rename to indicate this is for amplitude.
+  //
+  // TODO: Operate on doubles.
+  //
   public static float linearToDecibels(float sample)
   {
     if (sample == 0.0f) {
@@ -156,6 +161,12 @@ public class AudioClip {
       //
       return (float)(20.0 * Math.log10(Math.abs(sample)));
     }
+  }
+
+  // Decibel conversion for power.
+  public static double linearPowerToDecibels(double sample)
+  {
+    return linearToDecibels((float)sample) / 2;
   }
 
   // Convert floats back into bytes.

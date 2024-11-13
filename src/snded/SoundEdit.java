@@ -277,25 +277,14 @@ public class SoundEdit {
     double[] inputReal = new double[windowSize];
     double[] inputImag = new double[windowSize];     // All zeroes.
 
-    // Sum of all window factors.  Audacity `SpectrumAnalyst.cpp` uses
-    // this as part of its scaling, and I'm trying to replicate that.
-    double sumOfWindowFactors = 0;
-
     // Copy the audio samples into `inputReal`.
     long startFrameNum = 0;
     int numWindows = 1;     // TODO: multiple windows
     for (int i=0; i < windowSize; ++i) {
       long frameNum = startFrameNum + i;
 
-      double w = windowFunction(i, windowSize);
-      inputReal[i] = audio.getFCSample(frameNum, channel) * w;
-      sumOfWindowFactors += w;
-    }
-
-    // Second part of Audacity's mysterious scaling factor `wss`.
-    double totalWindowScaleFactor = 1;
-    if (sumOfWindowFactors > 0) {
-      totalWindowScaleFactor = 4.0 / (sumOfWindowFactors * sumOfWindowFactors);
+      inputReal[i] = audio.getFCSample(frameNum, channel) *
+                     windowFunction(i, windowSize);
     }
 
     // Apply FFT.  The result contains (real, imag) pairs interleaved.
@@ -309,14 +298,16 @@ public class SoundEdit {
       power[i] = complexMagnitudeSquared(output[i*2], output[i*2 + 1]);
     }
 
-    // Audacity "Convert to decibels".
+    // Convert power to decibels.
     double[] decibels = new double[halfWindowSize];
     {
+      // Divide by the number of windows used because each one
+      // contributed additively to the combined `power` array.
       assert(numWindows > 0);
-      double scale = totalWindowScaleFactor / numWindows;
+      double scale = windowScaleFactor(windowSize) / numWindows;
+
       for (int i=0; i < halfWindowSize; ++i) {
-        // Audacity clamps the value here but I'm omitting that for now.
-        decibels[i] = 10 * Math.log10(power[i] * scale);
+        decibels[i] = AudioClip.linearPowerToDecibels(power[i] * scale);
       }
     }
 
@@ -412,6 +403,37 @@ public class SoundEdit {
     // meets zero at the endpoints, and peaks at 1 in the middle of the
     // window.
     return 0.5 * (1 - Math.cos(2 * Math.PI * frameNum / windowSize));
+  }
+
+  // Return a number we can multiply by the FFT-computed power output
+  // values to normalize them such that an input amplitude of 1.0 would
+  // be reported as 0 dB.  That is, this returns what we think the power
+  // of a 1.0 signal would be.
+  private double windowScaleFactor(int windowSize)
+  {
+    // Sum of all window factors, i.e., what the sum would be of a 1.0
+    // signal multiplied by the window.  FFT is computing an analogous
+    // sum internally for each frequency.
+    double sumOfWindowFactors = 0;
+    for (int i=0; i < windowSize; ++i) {
+      sumOfWindowFactors += windowFunction(i, windowSize);
+    }
+
+    // Second part of Audacity's mysterious scaling factor `wss`.
+    double totalWindowScaleFactor = 1;
+    if (sumOfWindowFactors > 0) {
+      // Squaring the sum makes sense because we compute the square of
+      // the magnitude to get power.
+      //
+      // I think the 4.0 arises because we ignore the upper half of the
+      // output array, meaning we only get half of the total amplitude,
+      // and hence a quarter of the power, that we would if we used the
+      // entire output.
+      //
+      totalWindowScaleFactor = 4.0 / (sumOfWindowFactors * sumOfWindowFactors);
+    }
+
+    return totalWindowScaleFactor;
   }
 
   // Return the squared magnitude of complex number (R,I).
