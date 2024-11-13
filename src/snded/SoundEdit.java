@@ -370,6 +370,11 @@ public class SoundEdit {
   // Return an array of power values.  Element `i` describes the power
   // of the fourier component with frequency `(i/windowSize)*frameRate`.
   //
+  // `windowSize` must be a power of two.
+  //
+  // If the clip has fewer than `windowSize` samples, the output is all
+  // zeroes.
+  //
   // I'm not sure what units would be sensible here.  Power is energy
   // per time.  Time is abstracted away as the frame rate (which this
   // calculation does not depend on).  Energy is somehow abstracted away
@@ -379,41 +384,66 @@ public class SoundEdit {
   //
   public double[] powerSpectrum(AudioClip audio, int windowSize)
   {
-    // TODO: Handle multiple channels.
-    int channel = 0;
+    assert(windowSize > 1);
 
-    // For the moment just analyze one window and one channel.
     double[] inputReal = new double[windowSize];
     double[] inputImag = new double[windowSize];     // All zeroes.
 
+    // Initially all zeroes.
+    double[] power = new double[windowSize / 2];
+
     // Work our way through the clip, analyzing `windowSize`-sized
-    // chunks at a time, and accumulating the results in `power`.
-    long startFrameNum = 0;
-    int numWindows = 1;     // TODO: multiple windows
+    // chunks at a time, overlapping adjacent windows by half a window,
+    // and accumulating the results in `power`.
+    int numWindowEvaluations = 0;
+    for (long startFrameNum = 0;
+         startFrameNum + windowSize <= audio.numFrames();
+         startFrameNum += windowSize / 2) {
+      for (int channel = 0; channel < audio.numChannels(); ++channel) {
+        // Copy the audio samples into `inputReal`.
+        for (int i=0; i < windowSize; ++i) {
+          long frameNum = startFrameNum + i;
 
-    // Copy the audio samples into `inputReal`.
-    for (int i=0; i < windowSize; ++i) {
-      long frameNum = startFrameNum + i;
+          inputReal[i] = audio.getFCSample(frameNum, channel) *
+                         windowFunction(i, windowSize);
+        }
 
-      inputReal[i] = audio.getFCSample(frameNum, channel) *
-                     windowFunction(i, windowSize);
+        // Apply FFT.  The result contains (real, imag) pairs
+        // interleaved.
+        //
+        // TODO: Modify `fft` to not allocate a new output array on
+        // every call.
+        //
+        double[] output = FFTbase.fft(inputReal, inputImag, true /*direct*/);
+
+        // Accumulate the output power.
+        for (int i=0; i < power.length; ++i) {
+          // The power is computed as the square of the magnitude of the
+          // amplitude.  (I'm not sure what the mathematical
+          // justification for this is.)
+          power[i] += complexMagnitudeSquared(output[i*2], output[i*2 + 1]);
+        }
+
+        ++numWindowEvaluations;
+      }
     }
 
-    // Apply FFT.  The result contains (real, imag) pairs interleaved.
-    double[] output = FFTbase.fft(inputReal, inputImag, true /*direct*/);
+    if (numWindowEvaluations > 0) {
+      // Divide by the value that a constant 1.0 input signal would have
+      // after multiplying by the window function and adding all of the
+      // resulting elements.  (The division itself happens inside
+      // `windowScaleFactor`, so in this function, we treat it as a
+      // multiplier.)
+      double scale = windowScaleFactor(windowSize);
 
-    // Divide by the number of windows used because each one
-    // contributed additively to the combined `power` array.
-    assert(numWindows > 0);
-    double scale = windowScaleFactor(windowSize) / numWindows;
+      // Divide by the number of window evaluations used because each
+      // one contributed additively to the combined `power` array.
+      scale /= numWindowEvaluations;
 
-    // Compute the power of each signal as the square of the magnitude.
-    // (What is the mathematical justification for this?)
-    double[] power = new double[windowSize / 2];
-    for (int i=0; i < power.length; ++i) {
-      power[i] += scale *
-                  complexMagnitudeSquared(output[i*2], output[i*2 + 1]);
-
+      // Apply the scale factor to the entire output array.
+      for (int i=0; i < power.length; ++i) {
+        power[i] *= scale;
+      }
     }
 
     return power;
