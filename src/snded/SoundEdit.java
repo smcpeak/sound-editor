@@ -63,7 +63,7 @@ public class SoundEdit {
 
     for (long i=0; i < maxSamples && i < audio.numSamples(); ++i) {
       float f = audio.getSample(i);
-      float decibels = AudioClip.linearAmplitudeToDecibels(f);
+      double decibels = AudioClip.linearAmplitudeToDecibels(f);
 
       System.out.println("  sample " + i + ": " + f + "  \t" +
                          decibels + " dB");
@@ -117,7 +117,7 @@ public class SoundEdit {
 
     for (int frameNum=0; frameNum < numFrames; ++frameNum) {
       // Get maximum loudness over all channels.
-      float dB;
+      double dB;
       {
         dB = audio.getFCDecibels(frameNum, 0);
         for (int c=1; c < numChannels; ++c) {

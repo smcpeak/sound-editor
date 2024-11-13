@@ -17,10 +17,10 @@ public class Sound {
   public long m_endFrame;
 
   // The maximum loudness of any frame in the segment, in decibels.
-  public float m_maxLoudness_dB;
+  public double m_maxLoudness_dB;
 
   // ---- public methods ----
-  public Sound(long startFrame, long endFrame, float maxLoudness_dB)
+  public Sound(long startFrame, long endFrame, double maxLoudness_dB)
   {
     m_startFrame = startFrame;
     m_endFrame = endFrame;
@@ -35,7 +35,7 @@ public class Sound {
 
   // Extend the segment to `endFrame`, incorporating `loudness_dB` into
   // the maximum loudness.
-  public void extend(long endFrame, float loudness_dB)
+  public void extend(long endFrame, double loudness_dB)
   {
     assert(endFrame >= m_endFrame);
     m_endFrame = endFrame;

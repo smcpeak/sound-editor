@@ -114,7 +114,7 @@ public class AudioClip {
   }
 
   // Return the decibel level for the given frame and channel.
-  public float getFCDecibels(long frameIndex, int channel)
+  public double getFCDecibels(long frameIndex, int channel)
   {
     return linearAmplitudeToDecibels(getFCSample(frameIndex, channel));
   }
@@ -138,16 +138,13 @@ public class AudioClip {
   // Convert `sample`, nominally in [-1,1], to the "decibel" measure
   // that Audacity uses.  Note that this does not preserve information
   // because the output does not indicate the sign of the input.
-  //
-  // TODO: Operate on doubles.
-  //
-  public static float linearAmplitudeToDecibels(float sample)
+  public static double linearAmplitudeToDecibels(double sample)
   {
-    if (sample == 0.0f) {
+    if (sample == 0) {
       // `log10` is not defined on zero.  Use a very negative number of
       // decibels.  I've seen at least one place in Audacity that uses
       // the same value for a similar purpose.
-      return -100.0f;
+      return -100.0;
     }
     else {
       // Decibels are defined using the log of a ratio to a reference
@@ -157,14 +154,14 @@ public class AudioClip {
       // related to the distinction between power and amplitude, but I
       // don't know the details.
       //
-      return (float)(20.0 * Math.log10(Math.abs(sample)));
+      return 20.0 * Math.log10(Math.abs(sample));
     }
   }
 
   // Decibel conversion for power.
   public static double linearPowerToDecibels(double sample)
   {
-    return linearAmplitudeToDecibels((float)sample) / 2;
+    return linearAmplitudeToDecibels(sample) / 2;
   }
 
   // Convert floats back into bytes.
