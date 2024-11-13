@@ -271,43 +271,15 @@ public class SoundEdit {
       return;
     }
 
-    int channel = 0;
-
-    // For the moment just analyze one window and one channel.
-    double[] inputReal = new double[windowSize];
-    double[] inputImag = new double[windowSize];     // All zeroes.
-
-    // Copy the audio samples into `inputReal`.
-    long startFrameNum = 0;
-    int numWindows = 1;     // TODO: multiple windows
-    for (int i=0; i < windowSize; ++i) {
-      long frameNum = startFrameNum + i;
-
-      inputReal[i] = audio.getFCSample(frameNum, channel) *
-                     windowFunction(i, windowSize);
-    }
-
-    // Apply FFT.  The result contains (real, imag) pairs interleaved.
-    double[] output = FFTbase.fft(inputReal, inputImag, true /*direct*/);
-
-    // Compute the power of each signal as the square of the magnitude.
-    // (What is the mathematical justification for this?)
-    int halfWindowSize = windowSize / 2;
-    double[] power = new double[halfWindowSize];
-    for (int i=0; i < halfWindowSize; ++i) {
-      power[i] = complexMagnitudeSquared(output[i*2], output[i*2 + 1]);
-    }
+    // Compute the power spectrum.  The output has `windowSize/2`
+    // elements.
+    double[] power = powerSpectrum(audio, windowSize);
 
     // Convert power to decibels.
-    double[] decibels = new double[halfWindowSize];
+    double[] decibels = new double[power.length];
     {
-      // Divide by the number of windows used because each one
-      // contributed additively to the combined `power` array.
-      assert(numWindows > 0);
-      double scale = windowScaleFactor(windowSize) / numWindows;
-
-      for (int i=0; i < halfWindowSize; ++i) {
-        decibels[i] = AudioClip.linearPowerToDecibels(power[i] * scale);
+      for (int i=0; i < power.length; ++i) {
+        decibels[i] = AudioClip.linearPowerToDecibels(power[i]);
       }
     }
 
@@ -328,9 +300,9 @@ public class SoundEdit {
     double sumOfPowers = 0;
     double largestPower = 0;
     double largestDecibels = -100;
-    for (int i=1; i < halfWindowSize; ++i) {
+    for (int i=1; i < power.length; ++i) {
       // Frequency of FFT output element `i`.
-      float elementFreq = (float)i / (float)windowSize * audio.getFrameRate();
+      double elementFreq = (double)i / (double)windowSize * audio.getFrameRate();
 
       // Accumulate this element.
       sumOfPowers += power[i];
@@ -393,6 +365,58 @@ public class SoundEdit {
       System.out.printf("  up to %1$6.0f Hz: %2$5.3f\n",
         upperFreq, frequencyBin[fbin]);
     }
+  }
+
+  // Return an array of power values.  Element `i` describes the power
+  // of the fourier component with frequency `(i/windowSize)*frameRate`.
+  //
+  // I'm not sure what units would be sensible here.  Power is energy
+  // per time.  Time is abstracted away as the frame rate (which this
+  // calculation does not depend on).  Energy is somehow abstracted away
+  // as the unspecified units of the input samples.  So, I treat these
+  // values as merely comparable as ratios to some other nominal
+  // "maximum" power.
+  //
+  public double[] powerSpectrum(AudioClip audio, int windowSize)
+  {
+    // TODO: Handle multiple channels.
+    int channel = 0;
+
+    // For the moment just analyze one window and one channel.
+    double[] inputReal = new double[windowSize];
+    double[] inputImag = new double[windowSize];     // All zeroes.
+
+    // Work our way through the clip, analyzing `windowSize`-sized
+    // chunks at a time, and accumulating the results in `power`.
+    long startFrameNum = 0;
+    int numWindows = 1;     // TODO: multiple windows
+
+    // Copy the audio samples into `inputReal`.
+    for (int i=0; i < windowSize; ++i) {
+      long frameNum = startFrameNum + i;
+
+      inputReal[i] = audio.getFCSample(frameNum, channel) *
+                     windowFunction(i, windowSize);
+    }
+
+    // Apply FFT.  The result contains (real, imag) pairs interleaved.
+    double[] output = FFTbase.fft(inputReal, inputImag, true /*direct*/);
+
+    // Divide by the number of windows used because each one
+    // contributed additively to the combined `power` array.
+    assert(numWindows > 0);
+    double scale = windowScaleFactor(windowSize) / numWindows;
+
+    // Compute the power of each signal as the square of the magnitude.
+    // (What is the mathematical justification for this?)
+    double[] power = new double[windowSize / 2];
+    for (int i=0; i < power.length; ++i) {
+      power[i] += scale *
+                  complexMagnitudeSquared(output[i*2], output[i*2 + 1]);
+
+    }
+
+    return power;
   }
 
   // Return a factor by which to scale a sample depending on where it is
