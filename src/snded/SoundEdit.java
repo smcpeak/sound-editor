@@ -283,88 +283,79 @@ public class SoundEdit {
       }
     }
 
-    // Group the magnitudes into bins for every factor of 10 Hz.
-    int numFrequencyBins = 5;
-    float[] frequencyBin = new float[numFrequencyBins];
-    int[] elementsPerBin = new int[numFrequencyBins];
-
+    // Print the frequency power spectrum.
     final boolean debug = true;
     if (debug) {
-      System.out.printf("  freq         power       dB\n");
-      System.out.printf("------  ------------  -------\n");
-    }
+      System.out.printf("  freq         power       dB  dB stars\n");
+      System.out.printf("------  ------------  -------  ----------\n");
 
-    // Element 0 is just the constant offset, and hence ignored for
-    // frequency analysis purposes.  Elements beyond half the window
-    // size are beyond the audible range.
-    double sumOfPowers = 0;
-    double largestPower = 0;
-    double largestDecibels = -100;
-    for (int i=1; i < power.length; ++i) {
-      // Frequency of FFT output element `i`.
-      double elementFreq = (double)i / (double)windowSize * audio.getFrameRate();
+      for (int i=0; i < power.length; ++i) {
+        double elementFreq = spectrumElementFrequency(audio, i, windowSize);
+        double dB = decibels[i];
 
-      // Accumulate this element.
-      sumOfPowers += power[i];
-      largestPower = Math.max(largestPower, power[i]);
-      largestDecibels = Math.max(largestDecibels, decibels[i]);
+        // Graphically represent the dB level as a number of stars,
+        // where <= -100 is 0, (-100,-90] is 1, etc.
+        int numStars = (int)Math.floor((dB + 110.0) / 10.0);
+        String stars = (
+          numStars > 0?
+            "  " + "*".repeat(numStars) :
+            ""
+        );
 
-      if (debug) {
-        System.out.printf("%1$6.0f  %2$12.6f  %3$7.2f\n",
+        System.out.printf("%1$6.0f  %2$12.6f  %3$7.2f%4$s\n",
           elementFreq,
           power[i],
-          decibels[i]);
+          decibels[i],
+          stars);
       }
+    }
+
+    // Find the maximum power within a logarithmic set of bins, one for
+    // every factor of 10 Hz.
+    int numFrequencyBins = 5;
+    double[] maxDecibelsForBin = new double[numFrequencyBins];
+    Arrays.fill(maxDecibelsForBin, -100.0);
+    for (int i=0; i < power.length; ++i) {
+      double elementFreq = spectrumElementFrequency(audio, i, windowSize);
+      double dB = decibels[i];
 
       // Bin the frequencies as follows:
       //
-      //   [    0,      1)   -> -1 (discarded)
-      //   [    1,     10)   -> 0
+      //   [    0,     10)   -> 0
       //   [   10,    100)   -> 1
       //   [  100,   1000)   -> 2
       //   [ 1000,  10000)   -> 3
       //   [10000, 100000)   -> 4
       //   other             -> 5 or more (discarded)
       //
-      int binIndex = (int)Math.floor(Math.log10(elementFreq));
-      if (0 <= binIndex && binIndex < numFrequencyBins) {
-        frequencyBin[binIndex] += (float)power[i];
-        elementsPerBin[binIndex] += 1;
-      }
-    }
-
-    if (debug) {
-      System.out.printf("Sum of powers    : %1$12.6f\n", sumOfPowers);
-      System.out.printf("Largest power    : %1$12.6f\n", largestPower);
-      System.out.printf("Largest dB       : %1$12.6f\n", largestDecibels);
-    }
-
-    // Normalize all bins by the number of contributing elements.
-    float sumOverBins = 0;
-    for (int fbin=0; fbin < numFrequencyBins; ++fbin) {
-      if (elementsPerBin[fbin] > 0) {
-        frequencyBin[fbin] /= elementsPerBin[fbin];
-
-        // Add up the normalized bins.
-        sumOverBins += frequencyBin[fbin];
-      }
-    }
-
-    // Normalize the entire set of bins to [0,1].
-    if (sumOverBins > 0) {
-      for (int fbin=0; fbin < numFrequencyBins; ++fbin) {
-        frequencyBin[fbin] /= sumOverBins;
+      int binIndex = (int)Math.max(0, Math.floor(Math.log10(elementFreq)));
+      if (binIndex < numFrequencyBins) {
+        maxDecibelsForBin[binIndex] =
+          Math.max(maxDecibelsForBin[binIndex], dB);
       }
     }
 
     // Print the resulting frequency distribution.
-    System.out.println("frequency distribution (this part is wrong):");
+    System.out.println("frequency distribution:");
     for (int fbin=0; fbin < numFrequencyBins; ++fbin) {
       double upperFreq = Math.pow(10, fbin+1);
 
-      System.out.printf("  up to %1$6.0f Hz: %2$5.3f\n",
-        upperFreq, frequencyBin[fbin]);
+      System.out.printf("  up to %1$6.0f Hz: %2$8.3f dB max\n",
+        upperFreq, maxDecibelsForBin[fbin]);
     }
+  }
+
+  // Return the frequency associated with spectrum element
+  // `elementIndex` within a window of size `windowSize`.
+  public double spectrumElementFrequency(
+    AudioClip audio,
+    int elementIndex,
+    int windowSize)
+  {
+    // In a Fourier decomposition spectrum, each spectrum element is a
+    // coefficient of a sinusoid with the following frequency, which
+    // when all are combined recreates the original signal.
+    return (double)elementIndex / (double)windowSize * audio.getFrameRate();
   }
 
   // Return an array of power values.  Element `i` describes the power
