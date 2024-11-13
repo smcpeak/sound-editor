@@ -5,6 +5,8 @@ package snded;
 import util.StringUtil;
 import util.Util;
 
+import hedoluna.FFTbase;
+
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
@@ -260,6 +262,169 @@ public class SoundEdit {
       curSound.distanceToEndpoint(frameNum) > nextSound.distanceToEndpoint(frameNum);
   }
 
+  public void frequencyAnalysis(AudioClip audio)
+  {
+    int windowSize = 1024;
+    if (audio.numFrames() < windowSize) {
+      // It's not hard, I just need to add it.
+      System.out.println("cannot analyze fewer than " + windowSize + " samples");
+      return;
+    }
+
+    int channel = 0;
+
+    // For the moment just analyze one window and one channel.
+    double[] inputReal = new double[windowSize];
+    double[] inputImag = new double[windowSize];     // All zeroes.
+
+    // Sum of all window factors.  Audacity `SpectrumAnalyst.cpp` uses
+    // this as part of its scaling, and I'm trying to replicate that.
+    double sumOfWindowFactors = 0;
+
+    // Copy the audio samples into `inputReal`.
+    long startFrameNum = 0;
+    int numWindows = 1;     // TODO: multiple windows
+    for (int i=0; i < windowSize; ++i) {
+      long frameNum = startFrameNum + i;
+
+      double w = windowFunction(i, windowSize);
+      inputReal[i] = audio.getFCSample(frameNum, channel) * w;
+      sumOfWindowFactors += w;
+    }
+
+    // Second part of Audacity's mysterious scaling factor `wss`.
+    double totalWindowScaleFactor = 1;
+    if (sumOfWindowFactors > 0) {
+      totalWindowScaleFactor = 4.0 / (sumOfWindowFactors * sumOfWindowFactors);
+    }
+
+    // Apply FFT.  The result contains (real, imag) pairs interleaved.
+    double[] output = FFTbase.fft(inputReal, inputImag, true /*direct*/);
+
+    // Compute the power of each signal as the square of the magnitude.
+    // (What is the mathematical justification for this?)
+    int halfWindowSize = windowSize / 2;
+    double[] power = new double[halfWindowSize];
+    for (int i=0; i < halfWindowSize; ++i) {
+      power[i] = complexMagnitudeSquared(output[i*2], output[i*2 + 1]);
+    }
+
+    // Audacity "Convert to decibels".
+    double[] decibels = new double[halfWindowSize];
+    {
+      assert(numWindows > 0);
+      double scale = totalWindowScaleFactor / numWindows;
+      for (int i=0; i < halfWindowSize; ++i) {
+        // Audacity clamps the value here but I'm omitting that for now.
+        decibels[i] = 10 * Math.log10(power[i] * scale);
+      }
+    }
+
+    // Group the magnitudes into bins for every factor of 10 Hz.
+    int numFrequencyBins = 5;
+    float[] frequencyBin = new float[numFrequencyBins];
+    int[] elementsPerBin = new int[numFrequencyBins];
+
+    final boolean debug = true;
+    if (debug) {
+      System.out.printf("  freq         power       dB\n");
+      System.out.printf("------  ------------  -------\n");
+    }
+
+    // Element 0 is just the constant offset, and hence ignored for
+    // frequency analysis purposes.  Elements beyond half the window
+    // size are beyond the audible range.
+    double sumOfPowers = 0;
+    double largestPower = 0;
+    double largestDecibels = -100;
+    for (int i=1; i < halfWindowSize; ++i) {
+      // Frequency of FFT output element `i`.
+      float elementFreq = (float)i / (float)windowSize * audio.getFrameRate();
+
+      // Accumulate this element.
+      sumOfPowers += power[i];
+      largestPower = Math.max(largestPower, power[i]);
+      largestDecibels = Math.max(largestDecibels, decibels[i]);
+
+      if (debug) {
+        System.out.printf("%1$6.0f  %2$12.6f  %3$7.2f\n",
+          elementFreq,
+          power[i],
+          decibels[i]);
+      }
+
+      // Bin the frequencies as follows:
+      //
+      //   [    0,      1)   -> -1 (discarded)
+      //   [    1,     10)   -> 0
+      //   [   10,    100)   -> 1
+      //   [  100,   1000)   -> 2
+      //   [ 1000,  10000)   -> 3
+      //   [10000, 100000)   -> 4
+      //   other             -> 5 or more (discarded)
+      //
+      int binIndex = (int)Math.floor(Math.log10(elementFreq));
+      if (0 <= binIndex && binIndex < numFrequencyBins) {
+        frequencyBin[binIndex] += (float)power[i];
+        elementsPerBin[binIndex] += 1;
+      }
+    }
+
+    if (debug) {
+      System.out.printf("Sum of powers    : %1$12.6f\n", sumOfPowers);
+      System.out.printf("Largest power    : %1$12.6f\n", largestPower);
+      System.out.printf("Largest dB       : %1$12.6f\n", largestDecibels);
+    }
+
+    // Normalize all bins by the number of contributing elements.
+    float sumOverBins = 0;
+    for (int fbin=0; fbin < numFrequencyBins; ++fbin) {
+      if (elementsPerBin[fbin] > 0) {
+        frequencyBin[fbin] /= elementsPerBin[fbin];
+
+        // Add up the normalized bins.
+        sumOverBins += frequencyBin[fbin];
+      }
+    }
+
+    // Normalize the entire set of bins to [0,1].
+    if (sumOverBins > 0) {
+      for (int fbin=0; fbin < numFrequencyBins; ++fbin) {
+        frequencyBin[fbin] /= sumOverBins;
+      }
+    }
+
+    // Print the resulting frequency distribution.
+    System.out.println("frequency distribution (this part is wrong):");
+    for (int fbin=0; fbin < numFrequencyBins; ++fbin) {
+      double upperFreq = Math.pow(10, fbin+1);
+
+      System.out.printf("  up to %1$6.0f Hz: %2$5.3f\n",
+        upperFreq, frequencyBin[fbin]);
+    }
+  }
+
+  // Return a factor by which to scale a sample depending on where it is
+  // in the window to be analyzed.
+  private double windowFunction(int frameNum, int windowSize)
+  {
+    // Hann window, which is one cycle of cosine, shifted so it just
+    // meets zero at the endpoints, and peaks at 1 in the middle of the
+    // window.
+    return 0.5 * (1 - Math.cos(2 * Math.PI * frameNum / windowSize));
+  }
+
+  // Return the squared magnitude of complex number (R,I).
+  //
+  // I was using the square root here, but the Wikipedia article on
+  // short-time Fourier transform seems to indicate I want the square of
+  // the magnitude.
+  //
+  private double complexMagnitudeSquared(double R, double I)
+  {
+    return R*R + I*I;
+  }
+
   public void parseCommand(AudioClip audio, String command, String[] args)
     throws IOException
   {
@@ -293,6 +458,10 @@ public class SoundEdit {
           Float.valueOf(args[1]),
           Float.valueOf(args[2]),
           Float.valueOf(args[3]));
+        break;
+
+      case "freq":
+        frequencyAnalysis(audio);
         break;
 
       default:
@@ -341,6 +510,10 @@ public class SoundEdit {
 
             declick <outFname> <loud_dB> <close_s> <duration_s>
               Silence everything that "sounds" does not report.
+
+            freq
+              Print frequency distribution.
+
           """);
         System.exit(2);
       }
@@ -364,7 +537,7 @@ public class SoundEdit {
       }
     }
     catch (Exception e) {
-      System.out.println(Util.getExceptionMessage(e));
+      System.err.println(Util.getExceptionMessage(e));
       System.exit(2);
     }
   }
