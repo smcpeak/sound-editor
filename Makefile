@@ -16,6 +16,7 @@ all:
 
 # Tools.
 JAVAC := javac
+JAVA := java
 JAR := jar
 
 # Ensure the directory meant to hold the output file of a recipe exists.
@@ -36,6 +37,7 @@ dist/snded.jar: $(JAVA_FILES)
 
 .PHONY: check
 check: dist/snded.jar
+	$(JAVA) -cp bin snded.FFTTest
 	./snded soft-click.wav info
 	./snded soft-click.wav bytes 4
 	./snded soft-click.wav samples 4

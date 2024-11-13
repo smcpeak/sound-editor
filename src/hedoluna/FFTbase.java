@@ -1,3 +1,13 @@
+// FFTbase.java
+// Originally from https://github.com/hedoluna/fft commit 6f116b1 (2022-12-02).
+
+// Subsequently modified by smcpeak:
+//   * Add a few comments.
+//   * Add a package declaration.
+//   * Add `useLibreOfficeConventions`.
+
+package hedoluna;
+
 /**
 * @author Orlando Selenu
 * Originally written in the Summer of 2008
@@ -5,6 +15,12 @@
 * Released in the Public Domain.
 */
 public class FFTbase {
+
+// smcpeak: Enable a couple adjustments to the conventions in order to
+// make the output agree with LibreOffice `FOURIER` function so I can
+// more easily validate the output.
+public static final boolean useLibreOfficeConventions = true;
+
 /**
  * The Fast Fourier Transform (generic version, with NO optimizations).
  *
@@ -53,6 +69,10 @@ public static double[] fft(final double[] inputReal, double[] inputImag, boolean
         constant = -2 * Math.PI;
     else
         constant = 2 * Math.PI;
+
+    if (useLibreOfficeConventions) {
+        constant = -constant;
+    }
 
     // I don't want to overwrite the input arrays, so here I copy them. This
     // choice adds \Theta(2n) to the complexity.
@@ -107,6 +127,14 @@ public static double[] fft(final double[] inputReal, double[] inputImag, boolean
     // it's here to readibility).
     double[] newArray = new double[xReal.length * 2];
     double radice = 1 / Math.sqrt(n);
+    if (useLibreOfficeConventions) {
+        if (DIRECT) {
+            radice = 1;
+        }
+        else {
+            radice = 1 / (double)n;
+        }
+    }
     for (int i = 0; i < newArray.length; i += 2) {
         int i2 = i / 2;
         // I used Stephen Wolfram's Mathematica as a reference so I'm going
