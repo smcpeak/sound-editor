@@ -34,7 +34,7 @@ public class ArgMap {
     }
   }
 
-  int getInt(String name, int defaultValue)
+  public int getInt(String name, int defaultValue)
   {
     if (m_argMap.containsKey(name)) {
       return Integer.valueOf(m_argMap.get(name));
@@ -47,7 +47,7 @@ public class ArgMap {
     }
   }
 
-  float getFloat(String name, float defaultValue)
+  public float getFloat(String name, float defaultValue)
   {
     if (m_argMap.containsKey(name)) {
       return Float.valueOf(m_argMap.get(name));
@@ -60,7 +60,7 @@ public class ArgMap {
     }
   }
 
-  String getRequiredString(String name)
+  public String getRequiredString(String name)
   {
     if (m_argMap.containsKey(name)) {
       return m_argMap.get(name);

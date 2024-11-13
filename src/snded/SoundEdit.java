@@ -23,7 +23,7 @@ import java.util.List;
 public class SoundEdit {
   // This does not use the `AudioClip` class because it directly
   // accesses the bytes, not the decoded samples.
-  public void printBytes(AudioInputStream audio, int maxBytes)
+  private void printBytes(AudioInputStream audio, int maxBytes)
     throws IOException
   {
     AudioFormat fmt = audio.getFormat();
@@ -39,7 +39,7 @@ public class SoundEdit {
     }
   }
 
-  public void printInfo(AudioClip audio)
+  private void printInfo(AudioClip audio)
   {
     AudioFormat fmt = audio.getFormat();
     System.out.println("format: " + fmt);
@@ -57,7 +57,7 @@ public class SoundEdit {
     System.out.println("num samples: " + audio.numSamples());
   }
 
-  public void printSamples(AudioClip audio, int maxSamples)
+  private void printSamples(AudioClip audio, int maxSamples)
   {
     System.out.println("read " + audio.numSamples() + " samples:");
 
@@ -73,7 +73,7 @@ public class SoundEdit {
   // Write the samples back out to a WAV file without any intervening
   // processing.  This is meant, in part, to check that doing no-op
   // processing preserves the information.
-  public void copyToFile(AudioClip audio, String outFname)
+  private void copyToFile(AudioClip audio, String outFname)
     throws IOException
   {
     audio.writeToFile(outFname);
@@ -81,7 +81,7 @@ public class SoundEdit {
   }
 
   // Attempt to identify discrete sounds in the input.
-  public List<Sound> findSounds(
+  private List<Sound> findSounds(
     // Audio to process.
     AudioClip audio,
 
@@ -155,7 +155,7 @@ public class SoundEdit {
   }
 
   // Print the sounds that `findSounds` finds.
-  public void printSounds(
+  private void printSounds(
     AudioClip audio,
     float loudnessThreshold_dB,
     float closenessThreshold_s,
@@ -185,7 +185,7 @@ public class SoundEdit {
   // `closenessThreshold_s` and `closenesThreshold_s/2`, the samples in
   // the frame are scaled linearly.
   //
-  public void declick(
+  private void declick(
     AudioClip audio,
     String outFname,
     float loudnessThreshold_dB,
@@ -262,7 +262,7 @@ public class SoundEdit {
       curSound.distanceToEndpoint(frameNum) > nextSound.distanceToEndpoint(frameNum);
   }
 
-  public void frequencyAnalysis(AudioClip audio, int windowSize)
+  private void frequencyAnalysis(AudioClip audio, int windowSize)
   {
     // Compute the decibel spectrum.  The output has `windowSize/2`
     // elements.
@@ -292,7 +292,7 @@ public class SoundEdit {
     }
   }
 
-  public void frequencyAnalysisBins(AudioClip audio, int windowSize)
+  private void frequencyAnalysisBins(AudioClip audio, int windowSize)
   {
     double[] decibels = powerSpectrumDecibels(audio, windowSize);
 
@@ -333,7 +333,7 @@ public class SoundEdit {
 
   // Return the frequency associated with spectrum element
   // `elementIndex` within a window of size `windowSize`.
-  public double spectrumElementFrequency(
+  private double spectrumElementFrequency(
     AudioClip audio,
     int elementIndex,
     int windowSize)
@@ -360,7 +360,7 @@ public class SoundEdit {
   // values as merely comparable as ratios to some other nominal
   // "maximum" power.
   //
-  public double[] powerSpectrumLinear(AudioClip audio, int windowSize)
+  private double[] powerSpectrumLinear(AudioClip audio, int windowSize)
   {
     assert(windowSize > 1);
 
@@ -429,7 +429,7 @@ public class SoundEdit {
 
   // Compute a frequency power spectrum with the results expressed in
   // decibels.
-  public double[] powerSpectrumDecibels(AudioClip audio, int windowSize)
+  private double[] powerSpectrumDecibels(AudioClip audio, int windowSize)
   {
     // Compute the power spectrum.  The output has `windowSize/2`
     // elements.
@@ -539,7 +539,7 @@ public class SoundEdit {
 
     """;
 
-  public void parseCommand(AudioClip audio, String command, String[] args)
+  private void parseCommand(AudioClip audio, String command, String[] args)
     throws IOException
   {
     // Parse the argument as "<name>:<value>" pairs.
