@@ -17,6 +17,15 @@ public class BinnedPowerSpectrum {
   // value is somewhat arbitrarily -100 dB.
   private double[] m_maxDecibelsForBin;
 
+  // Ratio of max power in [100 Hz, 1000 Hz] to max power in [1000 Hz,
+  // 10000 Hz].
+  private double m_excessLow_dB;
+
+  // True if we heuristically think this spectrum corresponds to a
+  // click rather than voice.  This heuristic only works for very
+  // short sounds (less than 0.2 s).
+  private boolean m_likelyClick;
+
   // ------------------------- Public methods --------------------------
   // Bin the results from `ps`.
   public BinnedPowerSpectrum(PowerSpectrum ps)
@@ -45,6 +54,36 @@ public class BinnedPowerSpectrum {
           Math.max(m_maxDecibelsForBin[binIndex], dB);
       }
     }
+
+    // below 1000 Hz
+    double lowFreqMax_dB = getMaxForBin(2);
+
+    // above 1000 Hz
+    double highFreqMax_dB = getMaxForBin(3);
+
+    // Ratio of those two.  My hypothesis is that, for very short
+    // sounds (less than 0.2 s), I can use this to distinguish between
+    // voice and clicks, the latter having a negative value due to
+    // more high-frequency power.
+    m_excessLow_dB = lowFreqMax_dB - highFreqMax_dB;
+
+    m_likelyClick = (m_excessLow_dB < 0);
+  }
+
+  // Return the measured maximum decibels for `bin`.
+  public double getMaxForBin(int bin)
+  {
+    return m_maxDecibelsForBin[bin];
+  }
+
+  public double getExcessLow_dB()
+  {
+    return m_excessLow_dB;
+  }
+
+  public boolean getLikelyClick()
+  {
+    return m_likelyClick;
   }
 
   // Print the computed bins to stdout.

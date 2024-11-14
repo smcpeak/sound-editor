@@ -82,7 +82,13 @@ public class Sound {
       "  maxLoudness_dB: %1$.3f\n", m_maxLoudness_dB);
 
     if (m_powerSpectrum != null) {
-      new BinnedPowerSpectrum(m_powerSpectrum).printBins();
+      BinnedPowerSpectrum bps = new BinnedPowerSpectrum(m_powerSpectrum);
+
+      System.out.format(
+        "  excessLow_dB: %1$.3f\n", bps.getExcessLow_dB());
+
+      System.out.format(
+        "  likelyClick: %1$b\n", bps.getLikelyClick());
     }
 
     System.out.println("}");
