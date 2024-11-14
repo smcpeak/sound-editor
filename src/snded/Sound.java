@@ -19,12 +19,16 @@ public class Sound {
   // The maximum loudness of any frame in the segment, in decibels.
   public double m_maxLoudness_dB;
 
+  // Power per frequency.  Might be null if not computed.
+  public PowerSpectrum m_powerSpectrum;
+
   // ---- public methods ----
   public Sound(long startFrame, long endFrame, double maxLoudness_dB)
   {
     m_startFrame = startFrame;
     m_endFrame = endFrame;
     m_maxLoudness_dB = maxLoudness_dB;
+    m_powerSpectrum = null;
   }
 
   // Number of frames in this sound.  Always positive.
@@ -76,6 +80,10 @@ public class Sound {
 
     System.out.format(
       "  maxLoudness_dB: %1$.3f\n", m_maxLoudness_dB);
+
+    if (m_powerSpectrum != null) {
+      m_powerSpectrum.printBinnedFrequencyMaxima();
+    }
 
     System.out.println("}");
   }

@@ -4,6 +4,8 @@ package snded;
 
 import hedoluna.FFTbase;
 
+import java.util.Arrays;
+
 
 // Spectrum of relative power per frequency.
 //
@@ -19,6 +21,9 @@ import hedoluna.FFTbase;
 // constant sinusoid would have when measured at its frequency (that is,
 // such a signal would have 0 dB at that frequency).  Since that is the
 // maximum, all decibel values in this spectrum are non-positive.
+//
+// Measurement is performed by summing the results of measuring multiple
+// window-sized chunks.  This class uses a Hann (cosine) window.
 //
 public class PowerSpectrum {
   // -------------------------- Private data ---------------------------
@@ -76,9 +81,22 @@ public class PowerSpectrum {
   private float m_frameRate;
 
   // ------------------------- Public methods --------------------------
-  // Calculate the spectrum of `audio` using `windowSize`.  This uses
-  // a Hann (cosine) window.
+  // Calculate the spectrum of `audio` using `windowSize`.
   public PowerSpectrum(AudioClip audio, int windowSize)
+  {
+    this(
+      audio,
+      windowSize,
+      audio.getFirstFrameIndex(),
+      audio.getLastFrameIndex());
+  }
+
+  // Measure `audio` within the specified inclusive range.
+  public PowerSpectrum(
+    AudioClip audio,
+    int windowSize,
+    long startFrame,
+    long endFrame)
   {
     assert(audio != null);
     assert(windowSize >= 2);
@@ -87,7 +105,7 @@ public class PowerSpectrum {
     m_decibelsPerElement = new double[windowSize / 2];
     m_frameRate = audio.getFrameRate();
 
-    computeSpectrum(audio);
+    computeSpectrum(audio, startFrame, endFrame);
   }
 
   // Number of elements in the spectrum.
@@ -112,11 +130,54 @@ public class PowerSpectrum {
     return (double)elementIndex / (double)m_windowSize * m_frameRate;
   }
 
+  // Print to stdout the maximum relateive power within a logarithmic
+  // series of frequency bins.
+  //
+  // TODO: This doesn't belong here.  This is a temporary home.
+  //
+  public void printBinnedFrequencyMaxima()
+  {
+    // Find the maximum power within a logarithmic set of bins, one for
+    // every factor of 10 Hz.
+    int numFrequencyBins = 5;
+    double[] maxDecibelsForBin = new double[numFrequencyBins];
+    Arrays.fill(maxDecibelsForBin, -100.0);
+    for (int i=0; i < numElements(); ++i) {
+      double freq = getFrequency(i);
+      double dB = getDecibels(i);
+
+      // Bin the frequencies as follows:
+      //
+      //   [    0,     10)   -> 0
+      //   [   10,    100)   -> 1
+      //   [  100,   1000)   -> 2
+      //   [ 1000,  10000)   -> 3
+      //   [10000, 100000)   -> 4
+      //   other             -> 5 or more (discarded)
+      //
+      int binIndex = (int)Math.max(0, Math.floor(Math.log10(freq)));
+      if (binIndex < numFrequencyBins) {
+        maxDecibelsForBin[binIndex] =
+          Math.max(maxDecibelsForBin[binIndex], dB);
+      }
+    }
+
+    // Print the resulting frequency distribution.
+    System.out.println("  binned frequency distribution:");
+    for (int fbin=0; fbin < numFrequencyBins; ++fbin) {
+      double upperFreq = Math.pow(10, fbin+1);
+
+      System.out.printf("    up to %1$6.0f Hz: %2$8.3f dB max\n",
+        upperFreq, maxDecibelsForBin[fbin]);
+    }
+  }
+
   // ------------------------- Private methods -------------------------
   // Do the actual work of computing the spectrum.  This is separated
   // from the constructor so that the heavy computation does not clutter
   // the public part of the class.
-  private void computeSpectrum(AudioClip audio)
+  private void computeSpectrum(
+    AudioClip audio, long startFrameNum, long endFrameNum)
   {
     double[] inputReal = new double[m_windowSize];
     double[] inputImag = new double[m_windowSize];     // All zeroes.
@@ -131,7 +192,8 @@ public class PowerSpectrum {
     // relatively more measurements would be taken of the middle
     // sections.
     //
-    // Using half of the window size seems to be conventional.
+    // Using half of the window size seems to be conventional, and is
+    // what Audacity does.
     //
     final int windowIncrement = m_windowSize / 2;
 
@@ -139,17 +201,17 @@ public class PowerSpectrum {
     // a single window-sized chunk of input.
     int numWindowEvaluations = 0;
 
-    // Work our way through the clip, analyzing window-sized chunks at a
-    // time, overlapping adjacent windows by `windowIncrement`, and
-    // accumulating the results in `power`.
-    for (long startFrameNum = 0;
-         startFrameNum + m_windowSize <= audio.numFrames();
-         startFrameNum += windowIncrement) {
+    // Work our way through the specified section of the clip, analyzing
+    // window-sized chunks at a time, overlapping adjacent windows by
+    // `windowIncrement`, and accumulating the results in `power`.
+    for (long curFrameNum = startFrameNum;
+         curFrameNum + m_windowSize - 1 <= endFrameNum;
+         curFrameNum += windowIncrement) {
       // Perform measurements on every channel.
       for (int channel = 0; channel < audio.numChannels(); ++channel) {
         // Copy the audio samples into `inputReal`.
         for (int i=0; i < m_windowSize; ++i) {
-          long frameNum = startFrameNum + i;
+          long frameNum = curFrameNum + i;
 
           inputReal[i] = audio.getFCSample(frameNum, channel) *
                          windowFunction(i);

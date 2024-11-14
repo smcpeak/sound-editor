@@ -96,6 +96,18 @@ public class AudioClip {
     return numSamples() / numChannels();
   }
 
+  // First valid frame index (if the sequence is not empty).
+  public long getFirstFrameIndex()
+  {
+    return 0;
+  }
+
+  // Last valid frame index (if the sequence is not empty).
+  public long getLastFrameIndex()
+  {
+    return numFrames() - 1;
+  }
+
   // Get sample by frame and channel.
   public float getFCSample(long frameIndex, int channel)
   {

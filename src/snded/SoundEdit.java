@@ -140,6 +140,12 @@ public class SoundEdit {
       sounds.add(curSound);
     }
 
+    // Calculate the power spectra.
+    for (Sound s : sounds) {
+      s.m_powerSpectrum =
+        new PowerSpectrum(audio, 1024, s.m_startFrame, s.m_endFrame);
+    }
+
     return sounds;
   }
 
@@ -309,40 +315,7 @@ public class SoundEdit {
   private void frequencyAnalysisBins(AudioClip audio, int windowSize)
   {
     PowerSpectrum ps = new PowerSpectrum(audio, windowSize);
-
-    // Find the maximum power within a logarithmic set of bins, one for
-    // every factor of 10 Hz.
-    int numFrequencyBins = 5;
-    double[] maxDecibelsForBin = new double[numFrequencyBins];
-    Arrays.fill(maxDecibelsForBin, -100.0);
-    for (int i=0; i < ps.numElements(); ++i) {
-      double freq = ps.getFrequency(i);
-      double dB = ps.getDecibels(i);
-
-      // Bin the frequencies as follows:
-      //
-      //   [    0,     10)   -> 0
-      //   [   10,    100)   -> 1
-      //   [  100,   1000)   -> 2
-      //   [ 1000,  10000)   -> 3
-      //   [10000, 100000)   -> 4
-      //   other             -> 5 or more (discarded)
-      //
-      int binIndex = (int)Math.max(0, Math.floor(Math.log10(freq)));
-      if (binIndex < numFrequencyBins) {
-        maxDecibelsForBin[binIndex] =
-          Math.max(maxDecibelsForBin[binIndex], dB);
-      }
-    }
-
-    // Print the resulting frequency distribution.
-    System.out.println("binned frequency distribution:");
-    for (int fbin=0; fbin < numFrequencyBins; ++fbin) {
-      double upperFreq = Math.pow(10, fbin+1);
-
-      System.out.printf("  up to %1$6.0f Hz: %2$8.3f dB max\n",
-        upperFreq, maxDecibelsForBin[fbin]);
-    }
+    ps.printBinnedFrequencyMaxima();
   }
 
   // Command line help string.
