@@ -315,7 +315,7 @@ public class SoundEdit {
   private void frequencyAnalysisBins(AudioClip audio, int windowSize)
   {
     PowerSpectrum ps = new PowerSpectrum(audio, windowSize);
-    ps.printBinnedFrequencyMaxima();
+    new BinnedPowerSpectrum(ps).printBins();
   }
 
   // Command line help string.

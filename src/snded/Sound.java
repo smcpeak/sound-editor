@@ -82,7 +82,7 @@ public class Sound {
       "  maxLoudness_dB: %1$.3f\n", m_maxLoudness_dB);
 
     if (m_powerSpectrum != null) {
-      m_powerSpectrum.printBinnedFrequencyMaxima();
+      new BinnedPowerSpectrum(m_powerSpectrum).printBins();
     }
 
     System.out.println("}");

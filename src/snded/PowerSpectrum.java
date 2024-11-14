@@ -130,48 +130,6 @@ public class PowerSpectrum {
     return (double)elementIndex / (double)m_windowSize * m_frameRate;
   }
 
-  // Print to stdout the maximum relateive power within a logarithmic
-  // series of frequency bins.
-  //
-  // TODO: This doesn't belong here.  This is a temporary home.
-  //
-  public void printBinnedFrequencyMaxima()
-  {
-    // Find the maximum power within a logarithmic set of bins, one for
-    // every factor of 10 Hz.
-    int numFrequencyBins = 5;
-    double[] maxDecibelsForBin = new double[numFrequencyBins];
-    Arrays.fill(maxDecibelsForBin, -100.0);
-    for (int i=0; i < numElements(); ++i) {
-      double freq = getFrequency(i);
-      double dB = getDecibels(i);
-
-      // Bin the frequencies as follows:
-      //
-      //   [    0,     10)   -> 0
-      //   [   10,    100)   -> 1
-      //   [  100,   1000)   -> 2
-      //   [ 1000,  10000)   -> 3
-      //   [10000, 100000)   -> 4
-      //   other             -> 5 or more (discarded)
-      //
-      int binIndex = (int)Math.max(0, Math.floor(Math.log10(freq)));
-      if (binIndex < numFrequencyBins) {
-        maxDecibelsForBin[binIndex] =
-          Math.max(maxDecibelsForBin[binIndex], dB);
-      }
-    }
-
-    // Print the resulting frequency distribution.
-    System.out.println("  binned frequency distribution:");
-    for (int fbin=0; fbin < numFrequencyBins; ++fbin) {
-      double upperFreq = Math.pow(10, fbin+1);
-
-      System.out.printf("    up to %1$6.0f Hz: %2$8.3f dB max\n",
-        upperFreq, maxDecibelsForBin[fbin]);
-    }
-  }
-
   // ------------------------- Private methods -------------------------
   // Do the actual work of computing the spectrum.  This is separated
   // from the constructor so that the heavy computation does not clutter
