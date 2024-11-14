@@ -140,6 +140,10 @@ public class PowerSpectrum {
     double[] inputReal = new double[m_windowSize];
     double[] inputImag = new double[m_windowSize];     // All zeroes.
 
+    // Working storage for the FFT algorithm.
+    FFTbase.WorkingStorage fftStorage =
+      new FFTbase.WorkingStorage(m_windowSize);
+
     // Linear relative power.  Initially all zeroes.
     double[] power = new double[m_windowSize / 2];
 
@@ -178,10 +182,12 @@ public class PowerSpectrum {
         // Apply FFT.  The result contains (real, imag) pairs
         // interleaved.
         //
-        // TODO: Modify `fft` to not allocate a new output array on
-        // every call.
+        // NOTE: The returned array is simply a reference to the one in
+        // `storage`, and will be overwritten on the next call to FFT,
+        // so we must copy its values out before the next call.
         //
-        double[] output = FFTbase.fft(inputReal, inputImag, true /*direct*/);
+        double[] output = FFTbase.fft_no_alloc(
+          inputReal, inputImag, true /*direct*/, fftStorage);
 
         // Accumulate the output power.
         for (int i=0; i < power.length; ++i) {

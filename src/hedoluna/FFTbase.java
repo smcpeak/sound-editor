@@ -21,6 +21,25 @@ public class FFTbase {
 // more easily validate the output.
 public static final boolean useLibreOfficeConventions = true;
 
+// Class to contain the working storage that will be reused between
+// calls.  The client does not need to clear it between calls.
+public static class WorkingStorage {
+    // The algorithm populates these two arrays with the output at
+    // first.
+    /*package*/ double[] xReal;
+    /*package*/ double[] xImag;
+
+    // Then it copies the output here, so this is the actual output.
+    /*package*/ double[] newArray;
+
+    public WorkingStorage(int n)
+    {
+        xReal = new double[n];
+        xImag = new double[n];
+        newArray = new double[n * 2];
+    }
+}
+
 /**
  * The Fast Fourier Transform (generic version, with NO optimizations).
  *
@@ -33,6 +52,30 @@ public static final boolean useLibreOfficeConventions = true;
  * @return a new array of length 2n
  */
 public static double[] fft(final double[] inputReal, double[] inputImag, boolean DIRECT) {
+    // smcpeak: This function is now a wrapper for `fft_no_alloc`.
+    WorkingStorage storage = new WorkingStorage(inputReal.length);
+
+    return fft_no_alloc(
+        inputReal,
+        inputImag,
+        DIRECT,
+        storage);
+}
+
+
+// smcpeak: Variant that does not do any allocation.  The array it
+// returns is the one contained inside `storage`.  The client must
+// copy its values elsewhere before calling this function again with
+// the same `storage`.
+//
+// It turns out that this optimization made no difference!
+//
+public static double[] fft_no_alloc(
+    double[] inputReal,
+    double[] inputImag,
+    boolean DIRECT,
+    WorkingStorage storage)
+{
     // - n is the dimension of the problem
     // - nu is its logarithm in base e
     int n = inputReal.length;
@@ -43,8 +86,7 @@ public static double[] fft(final double[] inputReal, double[] inputImag, boolean
     // Here I check if n is a power of 2. If exist decimals in ld, I quit
     // from the function returning null.
     if (((int) ld) - ld != 0) {
-        System.out.println("The number of elements is not a power of 2.");
-        return new double[0];
+        throw new RuntimeException("The number of FFT elements is not a power of 2.");
     }
 
     // Declaration and initialization of the variables
@@ -53,8 +95,8 @@ public static double[] fft(final double[] inputReal, double[] inputImag, boolean
     int nu = (int) ld;
     int n2 = n / 2;
     int nu1 = nu - 1;
-    double[] xReal = new double[n];
-    double[] xImag = new double[n];
+    double[] xReal = storage.xReal;
+    double[] xImag = storage.xImag;
     double tReal;
     double tImag;
     double p;
@@ -125,7 +167,7 @@ public static double[] fft(final double[] inputReal, double[] inputImag, boolean
     // Here I have to mix xReal and xImag to have an array (yes, it should
     // be possible to do this stuff in the earlier parts of the code, but
     // it's here to readibility).
-    double[] newArray = new double[xReal.length * 2];
+    double[] newArray = storage.newArray;
     double radice = 1 / Math.sqrt(n);
     if (useLibreOfficeConventions) {
         if (DIRECT) {
