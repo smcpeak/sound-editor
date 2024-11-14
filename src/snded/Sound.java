@@ -7,7 +7,7 @@ package snded;
 // discrete sound within the context of an analysis and transformation
 // that deals with sounds in a longer clip.
 public class Sound {
-  // ---- public data ----
+  // --------------------------- Public data ---------------------------
   // The starting frame number of the sound.  This is the first frame
   // whose loudness exceeds some threshold.
   public long m_startFrame;
@@ -22,19 +22,28 @@ public class Sound {
   // Power per frequency.  Might be null if not computed.
   public PowerSpectrum m_powerSpectrum;
 
-  // ---- public methods ----
+  // Max power within coarse frequency groupings.  Might be null.
+  public BinnedPowerSpectrum m_binnedPowerSpectrum;
+
+  // ------------------------- Public methods --------------------------
   public Sound(long startFrame, long endFrame, double maxLoudness_dB)
   {
     m_startFrame = startFrame;
     m_endFrame = endFrame;
     m_maxLoudness_dB = maxLoudness_dB;
     m_powerSpectrum = null;
+    m_binnedPowerSpectrum = null;
   }
 
   // Number of frames in this sound.  Always positive.
   public long frameDuration()
   {
     return m_endFrame - m_startFrame + 1;
+  }
+
+  public double timeDuration(double frameRate)
+  {
+    return framesToTime(frameDuration(), frameRate);
   }
 
   // Extend the segment to `endFrame`, incorporating `loudness_dB` into
@@ -63,7 +72,9 @@ public class Sound {
   }
 
   // Print sound details, including duration in seconds.
-  public void printWithDuration(float frameRate)
+  public void printWithDuration(
+    float frameRate,
+    SoundClassifier classifier)
   {
     assert(frameRate > 0);
     float duration_s =
@@ -91,16 +102,25 @@ public class Sound {
         "  likelyClick: %1$b\n", bps.getLikelyClick());
     }
 
+    boolean retain =
+      classifier.shouldRetain(this, frameRate, true /*useSpectrum*/);
+    System.out.format(
+      "  retain: %1$b\n", retain);
+
     System.out.println("}");
   }
 
-  // Return `frame` expressed as seconds, as a string.
-  private String framesToTimeString(long frames, float frameRate)
+  // Return `frame` expressed as seconds.
+  public double framesToTime(long frames, double frameRate)
   {
     // Convert to seconds.
-    float duration_s = frames / frameRate;
+    return frames / frameRate;
+  }
 
-    return String.format("%1$.3f", duration_s);
+  // Return `frame` expressed as seconds, as a string.
+  public String framesToTimeString(long frames, double frameRate)
+  {
+    return String.format("%1$.3f", framesToTime(frames, frameRate));
   }
 }
 

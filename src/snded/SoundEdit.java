@@ -80,16 +80,8 @@ public class SoundEdit {
 
   // Attempt to identify discrete sounds in the input.
   private List<Sound> findSounds(
-    // Audio to process.
     AudioClip audio,
-
-    // Any sample this loud or louder (measured in decibels) will be
-    // considered loud enough to anchor a sound.
-    float loudnessThreshold_dB,
-
-    // If two loud samples are this close (measured in seconds), then
-    // they are considered to be part of the same sound.
-    float closenessThreshold_s)
+    SoundPartitionParams params)
   {
     // This code is intended to work correctly with multi-channel data,
     // but I haven't actually tested with more than one.
@@ -98,7 +90,7 @@ public class SoundEdit {
     long numFrames = audio.numFrames();
 
     int closenessThreshold_frames =
-      (int)(closenessThreshold_s * frameRate);
+      (int)(params.m_closenessThreshold_s * frameRate);
 
     // List of all discovered sounds.
     List<Sound> sounds = new ArrayList<Sound>();
@@ -116,7 +108,7 @@ public class SoundEdit {
         }
       }
 
-      if (dB > loudnessThreshold_dB) {
+      if (dB > params.m_loudnessThreshold_dB) {
         // Continue the current sound?
         if ((curSound != null) &&
             frameNum - curSound.m_endFrame <= closenessThreshold_frames) {
@@ -144,6 +136,8 @@ public class SoundEdit {
     for (Sound s : sounds) {
       s.m_powerSpectrum =
         new PowerSpectrum(audio, 1024, s.m_startFrame, s.m_endFrame);
+      s.m_binnedPowerSpectrum =
+        new BinnedPowerSpectrum(s.m_powerSpectrum);
     }
 
     return sounds;
@@ -152,38 +146,34 @@ public class SoundEdit {
   // Print the sounds that `findSounds` finds.
   private void printSounds(
     AudioClip audio,
-    float loudnessThreshold_dB,
-    float closenessThreshold_s,
-
-    // If a is shorter than this duration (measured in seconds), ignore
-    // it.  If it is zero then no duration filtering occurs.
-    float durationThreshold_s)
+    SoundPartitionParams params,
+    SoundClassifier classifier)
   {
-    List<Sound> sounds = findSounds(audio,
-      loudnessThreshold_dB,
-      closenessThreshold_s);
+    List<Sound> sounds = findSounds(audio, params);
 
-    sounds = filterSoundDuration(sounds, audio, durationThreshold_s);
+    // Here, we do not use the spectrum because I want to see all of
+    // the detected sounds (of sufficient duration) and the retention
+    // decision in order to evaluate the retention criteria.
+    sounds = filterSounds(sounds,
+      audio, classifier, false /*useSpectrum*/);
 
     for (Sound s : sounds) {
-      s.printWithDuration(audio.getFormat().getFrameRate());
+      s.printWithDuration(audio.getFormat().getFrameRate(), classifier);
     }
   }
 
-  // Filter `origSounds`, returning only those whose duration is at
-  // least `durationThreshold_s`.
-  private List<Sound> filterSoundDuration(
+  // Filter `origSounds`, returning only those that `classifier` says
+  // to retain.
+  private List<Sound> filterSounds(
     List<Sound> origSounds,
     AudioClip audio,
-    float durationThreshold_s)
+    SoundClassifier classifier,
+    boolean useSpectrum)
   {
     List<Sound> ret = new ArrayList<Sound>();
 
-    int durationThreshold_frames =
-      (int)(durationThreshold_s * audio.getFrameRate());
-
     for (Sound s : origSounds) {
-      if (s.frameDuration() >= durationThreshold_frames) {
+      if (classifier.shouldRetain(s, audio.getFrameRate(), useSpectrum)) {
         ret.add(s);
       }
     }
@@ -208,19 +198,17 @@ public class SoundEdit {
   private void declick(
     AudioClip audio,
     String outFname,
-    float loudnessThreshold_dB,
-    float closenessThreshold_s,
-    float durationThreshold_s)
+    SoundPartitionParams params,
+    SoundClassifier classifier)
       throws IOException
   {
     int closenessThreshold_frames =
-      (int)(closenessThreshold_s * audio.getFrameRate());
+      (int)(params.m_closenessThreshold_s * audio.getFrameRate());
 
-    List<Sound> sounds = findSounds(audio,
-      loudnessThreshold_dB,
-      closenessThreshold_s);
+    List<Sound> sounds = findSounds(audio, params);
 
-    sounds = filterSoundDuration(sounds, audio, durationThreshold_s);
+    sounds = filterSounds(sounds,
+      audio, classifier, true /*useSpectrum*/);
 
     Iterator<Sound> soundIter = sounds.iterator();
 
@@ -328,33 +316,51 @@ public class SoundEdit {
     making them optional.
 
     commands:
+
       info
+
         Print some details about the given file.
 
       bytes [max:int(10)]
+
         Print up to <max> bytes of sample data.
 
       samples [max:int(10)]
+
         Print up to <max> samples.
 
       copy [out:string]
+
         Copy the file by decoding then re-encoding the samples.
 
       sounds [loud_dB:float(-40)] [close_s:float(0.2)]
-             [duration_s:float(0.09)]
+             [duration_s:float(0.09)] [maxClick_s:float(0.2)]
+
         Report on the set of discrete sounds, where a "sound" has
         samples louder than <loud_dB> that are within <close_s>
         seconds of each other, and a total duration at least
         <duration_s> seconds.
 
-      declick [out:string] [loud_dB:float(-40)]
-              [close_s:float(0.2)] [duration_s:float(0.09)]
-        Silence everything that "sounds" does not report.
+        Furthermore, if the duration is between <duration_s> and
+        <maxClick_s>, then heuristically indicate whether to retain
+        based on a frequency analysis, discarding high-frequency sounds.
+
+      declick [out:string]
+              [loud_dB:float(-40)] [close_s:float(0.2)]
+              [duration_s:float(0.09)] [maxClick_s:float(0.2)]
+
+        This is the main capability of this tool.
+
+        Silence everything that "sounds" either does not report, or
+        reports with "retain: false".  Write the modified output to
+        <out> (a WAV file).
 
       freq [windowSize:int(1024)]
+
         Print frequency spectrum.
 
-      freqBins  [windowSize:int(1024)]
+      freqBins [windowSize:int(1024)]
+
         Bin the frequency spectrum at 10x logarithmic intervals.
 
     """;
@@ -382,17 +388,15 @@ public class SoundEdit {
 
       case "sounds":
         printSounds(audio,
-          argMap.getFloat("loud_dB", -40.0f),
-          argMap.getFloat("close_s", 0.2f),
-          argMap.getFloat("duration_s", 0.09f));
+          new SoundPartitionParams(argMap),
+          new SoundClassifier(argMap));
         break;
 
       case "declick":
         declick(audio,
           argMap.getRequiredString("out"),
-          argMap.getFloat("loud_dB", -40.0f),
-          argMap.getFloat("close_s", 0.2f),
-          argMap.getFloat("duration_s", 0.09f));
+          new SoundPartitionParams(argMap),
+          new SoundClassifier(argMap));
         break;
 
       case "freq":
