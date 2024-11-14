@@ -74,6 +74,7 @@ public class SoundEdit {
   private void copyToFile(AudioClip audio, String outFname)
     throws IOException
   {
+    progressReport("writing " + outFname);
     audio.writeToFile(outFname);
     System.out.println("wrote " + outFname);
   }
@@ -92,6 +93,10 @@ public class SoundEdit {
     int closenessThreshold_frames =
       (int)(params.m_closenessThreshold_s * frameRate);
 
+    // Report progress every this many frames.
+    long progressPeriod_frames =
+      (long)(60.0 * audio.getFrameRate());
+
     // List of all discovered sounds.
     List<Sound> sounds = new ArrayList<Sound>();
 
@@ -99,6 +104,11 @@ public class SoundEdit {
     Sound curSound = null;
 
     for (int frameNum=0; frameNum < numFrames; ++frameNum) {
+      if (frameNum % progressPeriod_frames == 0) {
+        progressReport("findSounds: processing frame " + frameNum +
+                       " of " + audio.numFrames());
+      }
+
       // Get maximum loudness over all channels.
       double dB;
       {
@@ -133,11 +143,23 @@ public class SoundEdit {
     }
 
     // Calculate the power spectra.
-    for (Sound s : sounds) {
-      s.m_powerSpectrum =
-        new PowerSpectrum(audio, 1024, s.m_startFrame, s.m_endFrame);
-      s.m_binnedPowerSpectrum =
-        new BinnedPowerSpectrum(s.m_powerSpectrum);
+    {
+      int totalSounds = sounds.size();
+      int curSoundNum = 0;
+
+      for (Sound s : sounds) {
+        if (curSoundNum % 100 == 0) {
+          progressReport("spectra: analyzing sound " + curSoundNum +
+                         " of " + totalSounds);
+        }
+
+        s.m_powerSpectrum =
+          new PowerSpectrum(audio, 1024, s.m_startFrame, s.m_endFrame);
+        s.m_binnedPowerSpectrum =
+          new BinnedPowerSpectrum(s.m_powerSpectrum);
+
+        ++curSoundNum;
+      }
     }
 
     return sounds;
@@ -205,6 +227,10 @@ public class SoundEdit {
     int closenessThreshold_frames =
       (int)(params.m_closenessThreshold_s * audio.getFrameRate());
 
+    // Report progress every this many frames.
+    long progressPeriod_frames =
+      (long)(60.0 * audio.getFrameRate());
+
     List<Sound> sounds = findSounds(audio, params);
 
     sounds = filterSounds(sounds,
@@ -220,6 +246,11 @@ public class SoundEdit {
 
     // Process all the frames in the clip.
     for (long frameNum=0; frameNum < audio.numFrames(); ++frameNum) {
+      if (frameNum % progressPeriod_frames == 0) {
+        progressReport("declick: processing frame " + frameNum +
+                       " of " + audio.numFrames());
+      }
+
       // Advance to next sound?
       if (nextIsCloser(curSound, nextSound, frameNum)) {
         // Yes.
@@ -415,6 +446,12 @@ public class SoundEdit {
     }
   }
 
+  // Print a progress report to stderr saying what the program is doing.
+  private static void progressReport(String info)
+  {
+    System.err.println(info);
+  }
+
   public static void main(String args[])
   {
     SoundEdit se = new SoundEdit();
@@ -438,7 +475,9 @@ public class SoundEdit {
         }
         else {
           // All other commands operate on the clip.
+          progressReport("reading " + fname);
           AudioClip audio = new AudioClip(ais);
+          progressReport("finished reading " + fname);
           se.parseCommand(audio, command, cmdArgs);
         }
       }
